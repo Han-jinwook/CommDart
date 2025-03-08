@@ -69,15 +69,13 @@
     {% endwith %}
 
     <form method="POST">
-        <!-- username 필드 -->
+        <!-- WTForms 필드 렌더링 (Flask-WTF 없음) -->
         <label for="username">{{ form.username.label }}</label>
         {{ form.username(id="username") }}
 
-        <!-- password 필드 -->
         <label for="password">{{ form.password.label }}</label>
         {{ form.password(id="password") }}
 
-        <!-- submit 버튼 -->
         {{ form.submit() }}
     </form>
 </body>
