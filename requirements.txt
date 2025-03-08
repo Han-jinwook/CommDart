@@ -6,4 +6,4 @@ numpy
 wtforms==3.2.1
 python-engineio==4.11.2
 python-socketio==5.12.1
-
+Flask-WTF==0.15.1
