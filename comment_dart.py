@@ -1,11 +1,12 @@
 import os
 import random
 import datetime
+
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField
+from wtforms import Form, StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired
+
 from flask_socketio import SocketIO, emit
 import eventlet
 eventlet.monkey_patch()
@@ -13,7 +14,6 @@ eventlet.monkey_patch()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 
-# eventlet 모드로 사용
 socketio = SocketIO(app, async_mode='eventlet')
 
 # ----- 로그인 매니저 설정 -----
@@ -39,8 +39,8 @@ def load_user(user_id):
         pass
     return None
 
-# ----- 로그인 폼 -----
-class LoginForm(FlaskForm):
+# ----- 로그인 폼 (FlaskForm -> Form) -----
+class LoginForm(Form):
     username = StringField('ID', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
     submit = SubmitField('Login')
@@ -66,6 +66,7 @@ def load_participants(filename="participants.txt"):
             except ValueError:
                 count = 1.0
             participants_dict[name] = participants_dict.get(name, 0) + count
+
         participants = [(name, int(count)) for name, count in participants_dict.items()]
 
         # 별명 100개 이상이면, 1~100까지 숫자로 대체
@@ -90,35 +91,45 @@ colors = [f"hsl({i * 360 / len(participants)}, 70%, 50%)" for i in range(len(par
 # ----- Flask Routes -----
 @app.route('/')
 def index():
-    return render_template('index.html',
-                           participants=participants,
-                           game_name_kr="썬드림 댓글 다트 로또게임",
-                           game_name_en="Sundream Comment Dart Lotto",
-                           user=current_user,
-                           colors=colors)
+    return render_template(
+        'index.html',
+        participants=participants,
+        game_name_kr="썬드림 댓글 다트 로또게임",
+        game_name_en="Sundream Comment Dart Lotto",
+        user=current_user,
+        colors=colors
+    )
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    form = LoginForm()
-    if form.validate_on_submit():
-        username = form.username.data
-        password = form.password.data
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        users_file = os.path.join(BASE_DIR, 'users.txt')
-        try:
-            with open(users_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    user_id, password_hash = line.strip().split(':')
-                    if user_id == username and password == password_hash:
-                        user = User(user_id)
-                        login_user(user)
-                        flash('로그인 성공!', 'success')
-                        return redirect(url_for('index'))
-            flash('잘못된 ID 또는 비밀번호입니다.', 'danger')
-        except:
-            flash('사용자 파일을 찾을 수 없습니다.', 'danger')
+    if request.method == 'POST':
+        # POST 방식 → 폼 데이터 검증
+        form = LoginForm(request.form)
+        if form.validate():
+            username = form.username.data
+            password = form.password.data
 
-    return render_template('login.html', form=form)
+            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+            users_file = os.path.join(BASE_DIR, 'users.txt')
+            try:
+                with open(users_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        user_id, password_hash = line.strip().split(':')
+                        if user_id == username and password_hash == password:
+                            user = User(user_id)
+                            login_user(user)
+                            flash('로그인 성공!', 'success')
+                            return redirect(url_for('index'))
+                flash('잘못된 ID 또는 비밀번호입니다.', 'danger')
+            except:
+                flash('사용자 파일을 찾을 수 없습니다.', 'danger')
+        else:
+            flash('폼 검증 실패.', 'danger')
+        return render_template('login.html', form=form)
+    else:
+        # GET 방식 → 빈 폼
+        form = LoginForm()
+        return render_template('login.html', form=form)
 
 @app.route('/logout')
 def logout():
@@ -131,7 +142,6 @@ games = {}
 
 @socketio.on('start_rotation')
 def handle_start_rotation(data):
-    # 현재 로그인 사용자 구분
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
     if user_id not in games:
         games[user_id] = {
@@ -161,9 +171,7 @@ def handle_start_rotation(data):
     game['final_winner'] = None
     game['current_angle'] = 0.0
 
-    # 소리 재생 신호 (옵션)
     emit('play_beep', broadcast=True)
-    # 회전 스레드 시작
     socketio.start_background_task(rotate, user_id)
 
 def rotate(user_id):
@@ -176,7 +184,6 @@ def rotate(user_id):
         time_left = (game['target_time'] - now).total_seconds()
 
         if time_left <= 0:
-            # 회전 종료
             game['running'] = False
             game['current_angle'] %= 360
             winner = calculate_winner(game['current_angle'])
@@ -185,21 +192,17 @@ def rotate(user_id):
             emit('play_fanfare', broadcast=True)
             break
 
-        # time_left에 따라 속도 조절 (1 ~ 6 범위)
         speed = max(1, min(6, time_left * 2))
-
-        # 랜덤 각도 누적
         game['current_angle'] += random.uniform(1, speed)
         game['current_angle'] %= 360
 
-        # 클라이언트에 각도 업데이트
-        emit('update_chart',
-             {'angle': game['current_angle'], 'winner': game['final_winner']},
-             broadcast=True)
-
+        emit(
+            'update_chart',
+            {'angle': game['current_angle'], 'winner': game['final_winner']},
+            broadcast=True
+        )
         socketio.sleep(0.05)
 
-# ----- 당첨자 계산 -----
 def calculate_winner(final_angle):
     pointer_angle = final_angle % 360
     cumulative_angle = 0.0
@@ -215,9 +218,9 @@ def calculate_winner(final_angle):
 
 def in_arc_range(x, start, end):
     if start <= end:
-        return start <= x < end
+        return (start <= x < end)
     else:
-        return x >= start or x < end
+        return (x >= start) or (x < end)
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)
