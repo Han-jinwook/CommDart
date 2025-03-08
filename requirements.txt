@@ -1,0 +1,7 @@
+Flask==3.1.0
+Flask-Login==0.6.3
+Flask-SocketIO==5.5.1
+eventlet==0.33.3
+python-engineio==4.11.2
+python-socketio==5.12.1
+wtforms==3.2.1
