@@ -1,21 +1,19 @@
 import os
 import random
 import datetime
-import numpy as np
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired
 from flask_socketio import SocketIO, emit
-from werkzeug.security import generate_password_hash, check_password_hash
 import eventlet
 eventlet.monkey_patch()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 
-# eventlet 모드로 사용 (pip install eventlet 필요)
+# eventlet 모드로 사용
 socketio = SocketIO(app, async_mode='eventlet')
 
 # ----- 로그인 매니저 설정 -----
@@ -85,6 +83,7 @@ if not participants:
 names = [p[0] for p in participants]
 counts = [p[1] for p in participants]
 total_count = sum(counts)
+
 # 색상 리스트
 colors = [f"hsl({i * 360 / len(participants)}, 70%, 50%)" for i in range(len(participants))]
 
@@ -186,19 +185,18 @@ def rotate(user_id):
             emit('play_fanfare', broadcast=True)
             break
 
-        # time_left에 따라 속도 조절
-        # 1 ~ 6 사이로 회전
+        # time_left에 따라 속도 조절 (1 ~ 6 범위)
         speed = max(1, min(6, time_left * 2))
-        # 랜덤 각도만큼 누적
+
+        # 랜덤 각도 누적
         game['current_angle'] += random.uniform(1, speed)
         game['current_angle'] %= 360
 
-        # 클라이언트에게 각도 업데이트
+        # 클라이언트에 각도 업데이트
         emit('update_chart',
              {'angle': game['current_angle'], 'winner': game['final_winner']},
              broadcast=True)
 
-        # 0.05초 대기 후 반복
         socketio.sleep(0.05)
 
 # ----- 당첨자 계산 -----
@@ -213,15 +211,13 @@ def calculate_winner(final_angle):
         if in_arc_range(pointer_angle, seg_start, seg_end):
             return name
         cumulative_angle += sector_angle
-    # 혹시 못찾으면 마지막
     return names[-1]
 
 def in_arc_range(x, start, end):
     if start <= end:
-        return (start <= x < end)
+        return start <= x < end
     else:
-        return (x >= start) or (x < end)
+        return x >= start or x < end
 
 if __name__ == '__main__':
-    # debug=True를 사용하면 코드 변경 시 자동 재시작.
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)
