@@ -194,16 +194,16 @@ def rotate(user_id):
             socketio.emit('play_fanfare', namespace='/')
             break
 
-        # 속도를 크게 조정
+        # 속도를 크게 조정 (중요: 적절한 속도 설정)
         speed = max(3, min(30, time_left * 10))
         angle_step = random.uniform(speed * 0.5, speed)
-        game['current_angle'] += angle_step  # 중요: 각도 증가
+        game['current_angle'] += angle_step
         game['current_angle'] %= 360
 
         socketio.emit('update_chart',
                       {'angle': game['current_angle'], 'winner': game['final_winner']},
                       namespace='/')
-        eventlet.sleep(0.05)
+        eventlet.sleep(0.05)  # 업데이트 간격 (이 값도 중요)
 
 def calculate_winner(final_angle):
     # 3시 방향(0도)를 기준으로 당첨자 계산
