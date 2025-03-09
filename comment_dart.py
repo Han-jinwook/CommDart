@@ -1,3 +1,4 @@
+from flask_cors import CORS
 import os
 import random
 import datetime
@@ -13,6 +14,12 @@ eventlet.monkey_patch()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
+
+# CORS 설정 추가
+CORS(app)
+
+# SocketIO 객체 수정
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 # SocketIO 객체 (eventlet 모드)
 socketio = SocketIO(app, async_mode='eventlet')
