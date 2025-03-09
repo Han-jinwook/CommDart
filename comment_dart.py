@@ -116,25 +116,21 @@ if not participants:
     print("[ERROR] Failed to load participants. Exiting...")
     exit()
 
-# ----- colors 리스트도 여기서 생성 -----
+# ----- colors 리스트 생성 -----
 colors = []
-if participants:
-    # participants 개수만큼 색상 생성
-    for i in range(len(participants)):
-        h = i * 360 / len(participants)
-        colors.append(f"hsl({h}, 70%, 50%)")
-
-names = [p[0] for p in participants]
-counts = [p[1] for p in participants]
-total_count = sum(counts)
+for i in range(len(participants)):
+    h = i * 360 / len(participants)
+    colors.append(f"hsl({h}, 70%, 50%)")
 
 @app.route('/')
 def index():
-    # 템플릿에 colors 변수를 넘겨줌
-    return render_template('index.html',
-                           participants=participants,
-                           colors=colors,
-                           user=current_user)
+    # 템플릿에 colors 변수를 넘겨준다
+    return render_template(
+        'index.html',
+        participants=participants,
+        colors=colors,
+        user=current_user
+    )
 
 # ----- 게임 로직 -----
 games = {}
@@ -201,18 +197,18 @@ def rotate(user_id):
         eventlet.sleep(0.05)
 
 def calculate_winner(final_angle):
-    # 화살표가 3시(0도) 방향
     pointer_angle = final_angle % 360
+    total_count = sum(count for _, count in participants)
     cumulative_angle = 0.0
-    for name, count in zip(names, counts):
-        portion = count / total_count
+    for name, cnt in participants:
+        portion = cnt / total_count
         sector_angle = portion * 360.0
         seg_start = cumulative_angle % 360
         seg_end = (cumulative_angle + sector_angle) % 360
         if in_arc_range(pointer_angle, seg_start, seg_end):
             return name
         cumulative_angle += sector_angle
-    return names[-1]
+    return participants[-1][0]
 
 def in_arc_range(x, start, end):
     if start <= end:
