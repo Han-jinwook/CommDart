@@ -40,13 +40,13 @@
             width: 600px;
             height: 600px;
         }
-        /* 가는 막대 화살표: 3시 방향 */
+        /* 가는 막대 화살표: 원판 중심(50%,50%)에서 오른쪽(3시 방향)으로 200px 길이 */
         #pointer {
             position: absolute;
             left: 50%;
             top: 50%;
-            width: 200px;   /* 화살표 길이 */
-            height: 2px;    /* 화살표 두께 */
+            width: 200px;
+            height: 2px;
             background: red;
             transform-origin: 0 50%;
             transform: translate(0, -50%);
@@ -128,7 +128,7 @@
             <div id="main-container">
                 <div id="chart-container">
                     <canvas id="dart-chart"></canvas>
-                    <!-- 가는 막대 화살표(3시 방향) -->
+                    <!-- 가는 막대 화살표 -->
                     <div id="pointer"></div>
                 </div>
                 <div id="legend-container">
@@ -138,7 +138,6 @@
                     </div>
                     {% for p in participants %}
                         <div class="legend-item">
-                            <!-- colors[loop.index0]로 레전드 색상 -->
                             <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
                             {{ p[0] }} / {{ p[1] }}
                         </div>
@@ -155,7 +154,7 @@
         {% endif %}
     </div>
 
-    <!-- Chart.js + DataLabels + socket.io -->
+    <!-- Chart.js + DataLabels 플러그인 + Socket.IO 클라이언트 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
@@ -184,7 +183,6 @@
                         datalabels: {
                             color: '#000',
                             formatter: function(value, context) {
-                                // 섹터 위에 별명 표시
                                 return context.chart.data.labels[context.dataIndex];
                             },
                             font: { size: 14 }
@@ -203,7 +201,6 @@
             return colors;
         }
 
-        // 서버에서 각도/당첨자 정보 받음
         socket.on('update_chart', function(data) {
             chart.options.rotation = -data.angle * Math.PI / 180;
             chart.update();
@@ -234,20 +231,15 @@
                 alert('시간을 입력해주세요.');
                 return;
             }
-            // 로컬 시각(HH:MM) -> Date 객체
             const [localH, localM] = timeInput.split(':').map(Number);
             const localDate = new Date();
             localDate.setHours(localH, localM, 0, 0);
-
-            // 로컬 -> UTC 변환
             const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
             const utcDate = new Date(utcMs);
-
             const utcHours = utcDate.getHours().toString().padStart(2, '0');
             const utcMins = utcDate.getMinutes().toString().padStart(2, '0');
             const utcSecs = utcDate.getSeconds().toString().padStart(2, '0');
             const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
-
             console.log('Emitting start_rotation with UTC time:', formattedTime);
             socket.emit('start_rotation', { time: formattedTime });
         }
