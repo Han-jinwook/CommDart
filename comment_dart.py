@@ -101,4 +101,12 @@ def load_participants(filename="participants.txt"):
             except ValueError:
                 count = 1.0
             participants_dict[name] = participants_dict.get(name, 0) + count
+
         participants = [(name, int(count)) for name, count in participants_dict.items()]
+        if len(participants) > 100:
+            participants = [(f"{i+1}", count) for i, (name, count) in enumerate(participants)]
+        return participants
+
+    except Exception as e:
+        print("[ERROR] Failed to load participants:", e)
+        return None
