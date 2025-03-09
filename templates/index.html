@@ -40,19 +40,19 @@
             width: 600px;
             height: 600px;
         }
-        /* 고정 화살표 (3시 방향, 오른쪽 중앙) */
+        /* 긴 화살표: 3시 방향으로 길게 뻗음 (원판 뒤에서 회전) */
         #pointer {
             position: absolute;
-            top: 50%;
-            right: 0;
-            transform: translateY(-50%);
-            width: 0;
-            height: 0;
-            border-top: 20px solid transparent;
-            border-bottom: 20px solid transparent;
-            border-left: 20px solid red;
-            z-index: 10;
+            left: 50%;  /* 컨테이너의 중앙 */
+            top: 50%;   /* 컨테이너의 중앙 */
+            width: 250px;  /* 화살표 길이 */
+            height: 4px;   /* 화살표 두께 */
+            background: red;
+            transform-origin: 0 50%;
+            transform: translate(0, -50%);
+            z-index: 10;   /* 차트보다 위에 */
         }
+
         #legend-container {
             margin-left: 50px;
             text-align: left;
@@ -129,7 +129,8 @@
             <div id="main-container">
                 <div id="chart-container">
                     <canvas id="dart-chart"></canvas>
-                    <div id="pointer"></div> <!-- 고정 화살표 추가 -->
+                    <!-- 화살표를 3시 방향에 고정 -->
+                    <div id="pointer"></div>
                 </div>
                 <div id="legend-container">
                     <div class="legend-item">
@@ -154,16 +155,16 @@
         {% endif %}
     </div>
 
-    <!-- Chart.js, DataLabels 플러그인, Socket.IO 클라이언트 -->
+    <!-- Chart.js & DataLabels 플러그인 & socket.io -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
+
     <script>
         const socket = io();
         let chart;
 
         function initChart() {
-            // DataLabels 플러그인 전역 등록
             Chart.register(ChartDataLabels);
             const ctx = document.getElementById('dart-chart').getContext('2d');
             chart = new Chart(ctx, {
@@ -176,7 +177,7 @@
                     }]
                 },
                 options: {
-                    rotation: 0,  // 초기 회전은 0 (화살표가 3시 방향 고정)
+                    rotation: 0,  // 초기 각도(3시 방향)
                     animation: { duration: 0 },
                     plugins: {
                         legend: { display: false },
@@ -184,6 +185,7 @@
                         datalabels: {
                             color: '#000',
                             formatter: function(value, context) {
+                                // 섹터 위에 별명 표시
                                 return context.chart.data.labels[context.dataIndex];
                             },
                             font: { size: 14 }
@@ -202,16 +204,20 @@
             return colors;
         }
 
+        // 소켓 이벤트 수신
         socket.on('update_chart', function(data) {
-            // 회전 각도 업데이트 (chart rotation: -data.angle)
+            // 회전 각도 업데이트
             chart.options.rotation = -data.angle * Math.PI / 180;
             chart.update();
+
+            // 당첨자 메시지 (회전 중이라도 winner가 있으면 표시)
             if (data.winner) {
                 document.getElementById('winner').innerText = '당첨자: ' + data.winner;
             }
         });
 
         socket.on('update_winner', function(data) {
+            // 최종 당첨자
             document.getElementById('winner').innerText = '당첨자: ' + data.winner;
         });
 
@@ -227,30 +233,36 @@
             new Audio('/static/fanfare.wav').play().catch(() => console.log('Fanfare audio failed'));
         });
 
+        // "시작" 버튼 클릭
         function startRotation() {
             const timeInput = document.getElementById('target-time').value;
             if (!timeInput) {
                 alert('시간을 입력해주세요.');
                 return;
             }
-            // 로컬 시각 (HH:MM) → 오늘 날짜 기준 Date 객체 생성
+            // 로컬 시각(HH:MM)을 Date 객체로 변환
             const [localH, localM] = timeInput.split(':').map(Number);
             const localDate = new Date();
             localDate.setHours(localH, localM, 0, 0);
-            // 로컬 시각을 UTC로 변환
+
+            // 로컬 → UTC 변환
             const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
             const utcDate = new Date(utcMs);
+
             const utcHours = utcDate.getHours().toString().padStart(2, '0');
             const utcMins = utcDate.getMinutes().toString().padStart(2, '0');
             const utcSecs = utcDate.getSeconds().toString().padStart(2, '0');
             const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
-            console.log('Sending start_rotation with UTC time:', formattedTime);
+
+            console.log('Emitting start_rotation with UTC time:', formattedTime);
             socket.emit('start_rotation', { time: formattedTime });
         }
 
+        // 현재 로컬 시간 표시
         function updateTime() {
             const now = new Date();
-            document.getElementById('current-time').innerText = now.toLocaleTimeString('ko-KR', { hour12: false });
+            document.getElementById('current-time').innerText =
+                now.toLocaleTimeString('ko-KR', { hour12: false });
         }
         setInterval(updateTime, 1000);
 
