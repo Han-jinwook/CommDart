@@ -229,10 +229,11 @@
     }
 
     // 이 부분이 중요합니다 - update_chart 이벤트 핸들러
- socket.on('update_chart', function(data) {
-    // 원판을 회전시키는 부분 - 음수 각도로 회전해야 함
-    document.getElementById('rotating-container').style.transform = 
-        `rotate(${-data.angle}deg)`;
+socket.on('update_chart', function(data) {
+    // 차트 회전
+    chart.options.rotation = -data.angle * Math.PI / 180;
+    chart.update();
+    
     
     if (data.winner) {
         document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
