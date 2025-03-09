@@ -166,40 +166,38 @@
     reconnectionDelay: 1000
 });
         let chart;
-        let currentAudio = null;
-        let rotationInProgress = false;
 
-  function initChart() {
-    Chart.register(ChartDataLabels);
-    const ctx = document.getElementById('dart-chart').getContext('2d');
-    chart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
-            datasets: [{
-                data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
-                backgroundColor: generateColors({{ participants|length }})
-            }]
-        },
-        options: {
-            rotation: 0,
-            animation: false, // 애니메이션 완전히 비활성화
-            responsiveAnimationDuration: 0,
-            plugins: {
-                legend: { display: false },
-                tooltip: { enabled: false },
-                datalabels: {
-                    color: '#000',
-                    formatter: function(value, context) {
-                        return context.chart.data.labels[context.dataIndex];
+        function initChart() {
+            Chart.register(ChartDataLabels);
+            const ctx = document.getElementById('dart-chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
+                    datasets: [{
+                        data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
+                        backgroundColor: generateColors({{ participants|length }})
+                    }]
+                },
+                options: {
+                    rotation: 0,
+                    animation: { duration: 0 },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false },
+                        datalabels: {
+                            color: '#000',
+                            formatter: function(value, context) {
+                                // 섹터 위에 별명 표시
+                                return context.chart.data.labels[context.dataIndex];
+                            },
+                            font: { size: 14 }
+                        }
                     },
-                    font: { size: 14 }
+                    cutout: '60%'
                 }
-            },
-            cutout: '60%'
+            });
         }
-    });
-}
 
         function generateColors(count) {
             const colors = [];
@@ -210,21 +208,13 @@
         }
 
         // 서버에서 각도/당첨자 정보 받음
-socket.on('update_chart', function(data) {
-    console.log('Received angle:', data.angle); // 디버깅용
-    
-    // 기존 방식이 작동하지 않으므로 더 강력한 방식으로 변경
-    chart.options.rotation = -data.angle * Math.PI / 180;
-    chart.update('none'); // 애니메이션 없이 강제 업데이트
-    
-    // 포인터도 직접 회전
-    document.getElementById('pointer').style.transform = 
-        `translate(0, -50%) rotate(${data.angle}deg)`;
-        
-    if (data.winner) {
-        document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
-    }
-});
+        socket.on('update_chart', function(data) {
+            chart.options.rotation = -data.angle * Math.PI / 180;
+            chart.update();
+            if (data.winner) {
+                document.getElementById('winner').innerText = '당첨자: ' + data.winner;
+            }
+        });
 
         socket.on('update_winner', function(data) {
             document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
@@ -236,63 +226,12 @@ socket.on('update_chart', function(data) {
         });
 
         socket.on('play_beep', function() {
-    // 기존 오디오 중지
-    if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-    }
-    
-    // 새 오디오 재생
-    currentAudio = new Audio('/static/beep.wav');
-    currentAudio.play().catch(() => console.log('Beep audio failed'));
-});
+            new Audio('/static/beep.wav').play().catch(() => console.log('Beep audio failed'));
+        });
 
-socket.on('play_fanfare', function() {
-    // 기존 오디오 중지
-    if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-    }
-    
-    // 새 오디오 재생
-    currentAudio = new Audio('/static/fanfare.wav');
-    currentAudio.play().catch(() => console.log('Fanfare audio failed'));
-});
-3. 차트 초기화 코드 최적화
-initChart 함수도 수정해보세요:
-javascriptCopyfunction initChart() {
-    Chart.register(ChartDataLabels);
-    const ctx = document.getElementById('dart-chart').getContext('2d');
-    chart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
-            datasets: [{
-                data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
-                backgroundColor: generateColors({{ participants|length }})
-            }]
-        },
-        options: {
-            rotation: 0,
-            animation: false, // 애니메이션 완전히 비활성화
-            responsiveAnimationDuration: 0,
-            plugins: {
-                legend: { display: false },
-                tooltip: { enabled: false },
-                datalabels: {
-                    color: '#000',
-                    formatter: function(value, context) {
-                        return context.chart.data.labels[context.dataIndex];
-                    },
-                    font: { size: 14 }
-                }
-            },
-            cutout: '60%'
-        }
-    });
-}
-이러한 변경사항들을 적용한 후 다시 시도해보세요. 특히 update_chart 이벤트 처리 부분의 수정은 원판 회전 문제를 해결하는 데 중요하며, 사운드 효과 코드 수정은 소리 중복 재생 문제를 해결할 것입니다.
-코드를 수정하신 후 문제가 계속되면 원판이 실제로 어떻게 표시되는지 스크린샷을 공유해주시면 더 정확한 진단이 가능합니다.RetryClaude can make mistakes. Please double-check responses. 3.7 SonnetChoose styleTip: Long chats cause yo
+        socket.on('play_fanfare', function() {
+            new Audio('/static/fanfare.wav').play().catch(() => console.log('Fanfare audio failed'));
+        });
 
         function startRotation() {
             document.getElementById('start-button').disabled = true;
