@@ -194,10 +194,10 @@ def rotate(user_id):
             socketio.emit('play_fanfare', namespace='/')
             break
 
-        # 속도만 수정하고 나머지는 그대로
+        # 속도를 크게 조정
         speed = max(3, min(30, time_left * 10))
         angle_step = random.uniform(speed * 0.5, speed)
-        game['current_angle'] += angle_step
+        game['current_angle'] += angle_step  # 중요: 각도 증가
         game['current_angle'] %= 360
 
         socketio.emit('update_chart',
