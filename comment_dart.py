@@ -21,8 +21,6 @@ CORS(app)
 # SocketIO 객체 수정
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
-# SocketIO 객체 (eventlet 모드)
-socketio = SocketIO(app, async_mode='eventlet')
 
 # ----- 로그인 매니저 설정 -----
 login_manager = LoginManager()
