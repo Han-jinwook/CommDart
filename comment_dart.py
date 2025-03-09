@@ -14,7 +14,6 @@ eventlet.monkey_patch()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 
-# 서버는 eventlet을 이용하여 비동기 처리를 함
 socketio = SocketIO(app, async_mode='eventlet')
 
 # ----- 로그인 매니저 설정 -----
@@ -40,61 +39,11 @@ def load_user(user_id):
         pass
     return None
 
-# ----- 로그인 폼 (WTForms 사용, Flask-WTF 제거) -----
+# ----- 로그인 폼 (WTForms만 사용) -----
 class LoginForm(Form):
     username = StringField('ID', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
     submit = SubmitField('Login')
-
-# ----- 참가자 로딩 -----
-def load_participants(filename="participants.txt"):
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    participants_file = os.path.join(BASE_DIR, filename)
-    try:
-        with open(participants_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-        participants_dict = {}
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split()
-            if len(parts) < 2:
-                continue
-            name = parts[0]
-            try:
-                count = float(parts[1])
-            except ValueError:
-                count = 1.0
-            participants_dict[name] = participants_dict.get(name, 0) + count
-        participants = [(name, int(count)) for name, count in participants_dict.items()]
-        if len(participants) > 100:
-            participants = [(f"{i+1}", count) for i, (name, count) in enumerate(participants)]
-        return participants
-    except:
-        return None
-
-participants = load_participants()
-if not participants:
-    print("[ERROR] Failed to load participants. Check participants.txt.")
-    exit()
-
-names = [p[0] for p in participants]
-counts = [p[1] for p in participants]
-total_count = sum(counts)
-colors = [f"hsl({i * 360 / len(participants)}, 70%, 50%)" for i in range(len(participants))]
-
-# ----- Flask Routes -----
-@app.route('/')
-def index():
-    return render_template(
-        'index.html',
-        participants=participants,
-        game_name_kr="썬드림 댓글 다트 로또게임",
-        game_name_en="Sundream Comment Dart Lotto",
-        user=current_user,
-        colors=colors
-    )
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -130,13 +79,63 @@ def logout():
         logout_user()
     return redirect(url_for('index'))
 
+# ----- 참가자 로딩 -----
+def load_participants(filename="participants.txt"):
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    participants_file = os.path.join(BASE_DIR, filename)
+    try:
+        with open(participants_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        participants_dict = {}
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            name = parts[0]
+            try:
+                count = float(parts[1])
+            except ValueError:
+                count = 1.0
+            participants_dict[name] = participants_dict.get(name, 0) + count
+
+        participants = [(name, int(count)) for name, count in participants_dict.items()]
+        if len(participants) > 100:
+            participants = [(f"{i+1}", count) for i, (name, count) in enumerate(participants)]
+        return participants
+    except:
+        return None
+
+participants = load_participants()
+if not participants:
+    print("[ERROR] Failed to load participants. Check participants.txt.")
+    exit()
+
+names = [p[0] for p in participants]
+counts = [p[1] for p in participants]
+total_count = sum(counts)
+colors = [f"hsl({i * 360 / len(participants)}, 70%, 50%)" for i in range(len(participants))]
+
+@app.route('/')
+def index():
+    return render_template(
+        'index.html',
+        participants=participants,
+        game_name_kr="썬드림 댓글 다트 로또게임",
+        game_name_en="Sundream Comment Dart Lotto",
+        user=current_user,
+        colors=colors
+    )
+
 # ----- 게임 로직 관리 -----
 games = {}
 
 @socketio.on('start_rotation')
 def handle_start_rotation(data):
     """
-    클라이언트가 보내는 data: { time: "HH:MM:SS" } (UTC 기준)
+    클라이언트가 보내는 data: { time: "HH:MM:SS" }  (UTC 기준)
     """
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
     if user_id not in games:
@@ -144,7 +143,7 @@ def handle_start_rotation(data):
     game = games[user_id]
 
     t_str = data['time']
-    now = datetime.datetime.utcnow()  # 서버 기준 UTC 시각
+    now = datetime.datetime.utcnow()  # 서버 현재 UTC 시각
     target_today_str = now.strftime('%Y-%m-%d') + ' ' + t_str
     try:
         game['target_time'] = datetime.datetime.strptime(target_today_str, '%Y-%m-%d %H:%M:%S')
@@ -152,7 +151,7 @@ def handle_start_rotation(data):
         emit('error', {'message': '시간 형식이 잘못되었습니다. HH:MM:SS (UTC) 형식으로 입력.'}, broadcast=True)
         return
 
-    # 디버그: 서버 현재 시각과 목표 시각 출력
+    # 디버그 로그: 현재 UTC 시각과 목표 시각
     print("DEBUG: now =", now, "target_time =", game['target_time'])
     if game['target_time'] <= now:
         emit('error', {'message': '미래 시각을 입력해주세요.'}, broadcast=True)
@@ -187,7 +186,9 @@ def rotate(user_id):
         socketio.sleep(0.05)
 
 def calculate_winner(final_angle):
-    pointer_angle = final_angle % 360
+    # 포인터(화살표)는 3시(0°)에 고정되어 있음.
+    # 회전 후의 누적 각도(final_angle)가 곧 효과적 winning angle (즉, final_angle mod 360)이 됨.
+    pointer_angle = final_angle % 360  # 이 값이 원래 도넛 차트 기준 winning position (3시 방향)에 해당함.
     cumulative_angle = 0.0
     for name, count in zip(names, counts):
         portion = count / total_count
