@@ -213,7 +213,7 @@
         });
 
         socket.on('update_winner', function(data) {
-            document.getElementById('winner').innerText = '당첨자: ' + data.winner;
+            document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
         });
 
         socket.on('error', function(data) {
@@ -229,6 +229,7 @@
         });
 
         function startRotation() {
+            document.getElementById('start-button').disabled = true;
             const timeInput = document.getElementById('target-time').value;
             if (!timeInput) {
                 alert('시간을 입력해주세요.');
