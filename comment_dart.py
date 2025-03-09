@@ -229,9 +229,8 @@ def rotate(user_id):
         eventlet.sleep(0.05)
 
 def calculate_winner(final_angle):
-    # 화살표는 3시 방향(0도)에 있으므로, 회전한 각도의 반대 방향에 있는 섹터가 화살표와 만나게 됨
-    # 따라서 360에서 각도를 빼주어 반대 방향 계산
-    pointer_angle = (360 - final_angle) % 360
+    # 15도 오차 보정
+    pointer_angle = (360 - final_angle - 15) % 360
     print(f"Final angle: {final_angle}, Adjusted pointer angle: {pointer_angle}")
     
     cumulative_angle = 0.0
