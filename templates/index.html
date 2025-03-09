@@ -40,6 +40,19 @@
             width: 600px;
             height: 600px;
         }
+        /* 고정 화살표 (3시 방향, 오른쪽 중앙) */
+        #pointer {
+            position: absolute;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 20px solid transparent;
+            border-bottom: 20px solid transparent;
+            border-left: 20px solid red;
+            z-index: 10;
+        }
         #legend-container {
             margin-left: 50px;
             text-align: left;
@@ -116,6 +129,7 @@
             <div id="main-container">
                 <div id="chart-container">
                     <canvas id="dart-chart"></canvas>
+                    <div id="pointer"></div> <!-- 고정 화살표 추가 -->
                 </div>
                 <div id="legend-container">
                     <div class="legend-item">
@@ -149,6 +163,7 @@
         let chart;
 
         function initChart() {
+            // DataLabels 플러그인 전역 등록
             Chart.register(ChartDataLabels);
             const ctx = document.getElementById('dart-chart').getContext('2d');
             chart = new Chart(ctx, {
@@ -161,7 +176,7 @@
                     }]
                 },
                 options: {
-                    rotation: 0,
+                    rotation: 0,  // 초기 회전은 0 (화살표가 3시 방향 고정)
                     animation: { duration: 0 },
                     plugins: {
                         legend: { display: false },
@@ -188,6 +203,7 @@
         }
 
         socket.on('update_chart', function(data) {
+            // 회전 각도 업데이트 (chart rotation: -data.angle)
             chart.options.rotation = -data.angle * Math.PI / 180;
             chart.update();
             if (data.winner) {
@@ -217,11 +233,11 @@
                 alert('시간을 입력해주세요.');
                 return;
             }
-            // 로컬 시각 (HH:MM) -> 오늘 날짜로 Date 객체 생성
+            // 로컬 시각 (HH:MM) → 오늘 날짜 기준 Date 객체 생성
             const [localH, localM] = timeInput.split(':').map(Number);
             const localDate = new Date();
             localDate.setHours(localH, localM, 0, 0);
-            // 로컬 시각을 UTC로 변환: UTC = localDate.getTime() + (timezoneOffset in ms)
+            // 로컬 시각을 UTC로 변환
             const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
             const utcDate = new Date(utcMs);
             const utcHours = utcDate.getHours().toString().padStart(2, '0');
