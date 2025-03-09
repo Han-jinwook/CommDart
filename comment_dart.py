@@ -195,6 +195,7 @@ def rotate(user_id):
         if time_left <= 0:
             game['running'] = False
             game['current_angle'] %= 360
+            # 중요: 각도를 그대로 전달 (변환하지 않음)
             winner = calculate_winner(game['current_angle'])
             game['final_winner'] = winner
             socketio.emit('update_winner', {'winner': winner}, namespace='/')
@@ -202,17 +203,17 @@ def rotate(user_id):
             break
         
         # 속도 조정 로직
-        acceleration_time = min(5.0, total_duration / 3)  # 초반 가속 시간 (최대 5초)
-        deceleration_time = min(5.0, total_duration / 3)  # 후반 감속 시간 (최대 5초)
+        acceleration_time = min(5.0, total_duration / 3)
+        deceleration_time = min(5.0, total_duration / 3)
         
         if elapsed < acceleration_time:
-            # 초반 가속 단계 - 천천히 시작해서 빨라짐
-            speed_factor = elapsed / acceleration_time  # 0에서 1로 증가
+            # 초반 가속 단계
+            speed_factor = elapsed / acceleration_time
             max_speed = 30
             speed = max(3, max_speed * speed_factor)
         elif time_left < deceleration_time:
-            # 후반 감속 단계 - 점점 느려짐
-            speed_factor = time_left / deceleration_time  # 1에서 0으로 감소
+            # 후반 감속 단계
+            speed_factor = time_left / deceleration_time
             max_speed = 30
             speed = max(1, max_speed * speed_factor)
         else:
@@ -229,21 +230,41 @@ def rotate(user_id):
         eventlet.sleep(0.05)
 
 def calculate_winner(final_angle):
-    # 15도 오차 보정
-    pointer_angle = (360 - final_angle - 15) % 360
-    print(f"Final angle: {final_angle}, Adjusted pointer angle: {pointer_angle}")
+    # 화살표는 3시 방향(0도)에 고정되어 있음
+    # 원판이 시계방향으로 회전하므로, 화살표가 가리키는 위치는 회전 각도와 정확히 일치
+    pointer_angle = final_angle % 360
+    print(f"Final angle: {final_angle}, Pointer angle: {pointer_angle}")
     
+    # 디버깅: 각 섹터의 범위 출력
+    cumulative_angle = 0.0
+    sectors = []
+    for name, cnt in zip(names, counts):
+        portion = cnt / total_count
+        sector_angle = portion * 360.0
+        seg_start = cumulative_angle % 360
+        seg_end = (cumulative_angle + sector_angle) % 360
+        sectors.append((name, seg_start, seg_end))
+        cumulative_angle += sector_angle
+    
+    # 정렬해서 보기 쉽게 출력
+    print("All sectors:")
+    for name, start, end in sorted(sectors, key=lambda x: x[1]):
+        print(f"{name}: {start:.1f}° - {end:.1f}°")
+    
+    print(f"Pointer angle: {pointer_angle}°, looking for matching sector...")
+    
+    # 당첨자 찾기
     cumulative_angle = 0.0
     for name, cnt in zip(names, counts):
         portion = cnt / total_count
         sector_angle = portion * 360.0
         seg_start = cumulative_angle % 360
         seg_end = (cumulative_angle + sector_angle) % 360
-        print(f"Name: {name}, Range: {seg_start}-{seg_end}, Pointer: {pointer_angle}")
         
         if in_arc_range(pointer_angle, seg_start, seg_end):
-            print(f"WINNER SELECTED: {name}")
+            print(f"WINNER: {name}, in range {seg_start:.1f}° - {seg_end:.1f}°")
             return name
+        
         cumulative_angle += sector_angle
     
     print(f"No winner found, returning last name: {names[-1]}")
