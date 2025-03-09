@@ -35,45 +35,47 @@
             padding: 20px;
             max-width: 1200px;
         }
-#chart-container {
-    position: relative;
-    width: 600px;
-    height: 600px;
-    overflow: hidden;
-}
-
-#rotating-container {
-    width: 100%;
-    height: 100%;
-    position: absolute;
-    transition: none; /* 애니메이션 효과 없음 */
-}
-
-#pointer {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 200px;
-    height: 2px;
-    background: red;
-    transform-origin: 0 50%;
-    transform: translate(0, -50%);
-    z-index: 10;
-}
-
-/* 화살표 머리 - 3시 방향에 맞게 수정 */
-#pointer::after {
-    content: '';
-    position: absolute;
-    right: -10px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 0;
-    height: 0;
-    border-left: 10px solid red;
-    border-top: 7px solid transparent;
-    border-bottom: 7px solid transparent;
-}
+<style>
+    /* 기존 스타일 유지하고 아래 내용 추가/수정 */
+    #chart-container {
+        position: relative;
+        width: 600px;
+        height: 600px;
+        overflow: hidden;
+    }
+    #rotating-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        transition: none; /* 애니메이션 효과 없앰 */
+    }
+    #pointer {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 200px;
+        height: 2px;
+        background: red;
+        transform-origin: 0 50%;
+        transform: translate(0, -50%);
+        z-index: 10;
+    }
+    /* 화살표 머리 */
+    #pointer::after {
+        content: '';
+        position: absolute;
+        right: -10px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 0;
+        height: 0;
+        border-left: 10px solid red;
+        border-top: 7px solid transparent;
+        border-bottom: 7px solid transparent;
+    }
+</style>
         #legend-container {
             margin-left: 50px;
             text-align: left;
@@ -147,28 +149,28 @@
     <div id="controls">
         <p>현재 시간: <span id="current-time"></span></p>
         {% if user.is_authenticated %}
-            <div id="main-container">
-  <div id="chart-container">
-    <div id="rotating-container" style="width: 100%; height: 100%; position: relative;">
-        <canvas id="dart-chart"></canvas>
+  <div id="main-container">
+    <div id="chart-container">
+        <!-- 회전 컨테이너 추가 -->
+        <div id="rotating-container">
+            <canvas id="dart-chart"></canvas>
+        </div>
+        <!-- 포인터는 고정 -->
+        <div id="pointer"></div>
     </div>
-    <!-- 포인터는 고정 -->
-    <div id="pointer"></div>
-</div>
-                <div id="legend-container">
-                    <div class="legend-item">
-                        <span class="legend-color" style="background-color: transparent;"></span>
-                        <strong>별명 / 댓글수</strong>
-                    </div>
-                    {% for p in participants %}
-                        <div class="legend-item">
-                            <!-- colors[loop.index0]로 레전드 색상 -->
-                            <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
-                            {{ p[0] }} / {{ p[1] }}
-                        </div>
-                    {% endfor %}
-                </div>
+    <div id="legend-container">
+        <div class="legend-item">
+            <span class="legend-color" style="background-color: transparent;"></span>
+            <strong>별명 / 댓글수</strong>
+        </div>
+        {% for p in participants %}
+            <div class="legend-item">
+                <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
+                {{ p[0] }} / {{ p[1] }}
             </div>
+        {% endfor %}
+    </div>
+</div>  
             <div id="time-input-container">
                 <input type="time" id="target-time" value="04:44">
                 <button id="start-button" onclick="startRotation()">시작</button>
@@ -185,41 +187,72 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
 <script>
-    const socket = io();
+    // 명시적 WebSocket 트랜스포트 설정
+    const socket = io({
+        transports: ['websocket', 'polling'],
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+    });
     let chart;
-       socket.on('connect', function() {
-        console.log('Socket connected!');
-    });
-    function initChart() {
-    Chart.register(ChartDataLabels);
-    const ctx = document.getElementById('dart-chart').getContext('2d');
-    chart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
-            datasets: [{
-                data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
-                backgroundColor: generateColors({{ participants|length }})
-            }]
-        },
-        options: {
-            rotation: 0, // 회전 각도 0으로 고정
-            animation: false, // 애니메이션 비활성화
-            plugins: {
-                legend: { display: false },
-                tooltip: { enabled: false },
-                datalabels: {
-                    color: '#000',
-                    formatter: function(value, context) {
-                        return context.chart.data.labels[context.dataIndex];
-                    },
-                    font: { size: 14 }
-                }
-            },
-            cutout: '60%'
+    let rotationInProgress = false;
+
+    // 디버깅 함수 추가
+    function debugLog(msg) {
+        console.log(msg);
+        // 디버그 div가 있으면 거기에도 표시
+        const debugEl = document.getElementById('debug');
+        if (debugEl) {
+            const time = new Date().toLocaleTimeString();
+            debugEl.innerHTML += `<div>[${time}] ${msg}</div>`;
         }
+    }
+
+    // 연결 이벤트 처리
+    socket.on('connect', function() {
+        debugLog('Socket connected!');
     });
-}
+
+    socket.on('disconnect', function() {
+        debugLog('Socket disconnected!');
+    });
+
+    socket.on('connect_error', function(error) {
+        debugLog('Connection error: ' + error);
+    });
+
+    function initChart() {
+        debugLog('Initializing chart...');
+        Chart.register(ChartDataLabels);
+        const ctx = document.getElementById('dart-chart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
+                datasets: [{
+                    data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
+                    backgroundColor: generateColors({{ participants|length }})
+                }]
+            },
+            options: {
+                rotation: 0,
+                animation: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false },
+                    datalabels: {
+                        color: '#000',
+                        formatter: function(value, context) {
+                            return context.chart.data.labels[context.dataIndex];
+                        },
+                        font: { size: 14 }
+                    }
+                },
+                cutout: '60%'
+            }
+        });
+        debugLog('Chart initialized!');
+    }
+
     function generateColors(count) {
         const colors = [];
         for (let i = 0; i < count; i++) {
@@ -228,45 +261,69 @@
         return colors;
     }
 
-    // 이 부분이 중요합니다 - update_chart 이벤트 핸들러
- socket.on('update_chart', function(data) {
-    // 원판을 회전시키는 부분 - 음수 각도로 회전해야 함
-    document.getElementById('rotating-container').style.transform = 
-        `rotate(${-data.angle}deg)`;
-    
-    if (data.winner) {
-        document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
-    }
-});
+    // 차트 업데이트 이벤트 처리
+    socket.on('update_chart', function(data) {
+        const rotatingContainer = document.getElementById('rotating-container');
+        if (!rotatingContainer) {
+            debugLog('ERROR: rotating-container not found!');
+            return;
+        }
 
+        debugLog('Received angle: ' + data.angle.toFixed(2));
+        
+        // 회전 적용 - CSS transform 사용
+        rotatingContainer.style.transform = `rotate(${-data.angle}deg)`;
+        
+        if (data.winner) {
+            document.getElementById('winner').innerText = '당첨자: ' + data.winner;
+        }
+    });
+
+    // 당첨자 발표 이벤트 처리
     socket.on('update_winner', function(data) {
+        debugLog('Winner announced: ' + data.winner);
         document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
         document.getElementById('start-button').disabled = false;
+        rotationInProgress = false;
     });
 
     socket.on('error', function(data) {
+        debugLog('Server error: ' + data.message);
         alert(data.message);
         document.getElementById('start-button').disabled = false;
+        rotationInProgress = false;
     });
 
     socket.on('play_beep', function() {
-        new Audio('/static/beep.wav').play().catch(() => console.log('Beep audio failed'));
+        debugLog('Playing beep sound');
+        new Audio('/static/beep.wav').play().catch(e => debugLog('Sound error: ' + e));
     });
 
     socket.on('play_fanfare', function() {
-        new Audio('/static/fanfare.wav').play().catch(() => console.log('Fanfare audio failed'));
+        debugLog('Playing fanfare sound');
+        new Audio('/static/fanfare.wav').play().catch(e => debugLog('Sound error: ' + e));
     });
 
     function startRotation() {
-        // 버튼 비활성화
+        debugLog('Start button clicked');
+        
+        // 중복 클릭 방지
+        if (rotationInProgress) {
+            debugLog('Rotation already in progress');
+            return;
+        }
+        
         document.getElementById('start-button').disabled = true;
+        rotationInProgress = true;
         
         const timeInput = document.getElementById('target-time').value;
         if (!timeInput) {
             alert('시간을 입력해주세요.');
             document.getElementById('start-button').disabled = false;
+            rotationInProgress = false;
             return;
         }
+        
         const [localH, localM] = timeInput.split(':').map(Number);
         const localDate = new Date();
         localDate.setHours(localH, localM, 0, 0);
@@ -276,7 +333,8 @@
         const utcMins = utcDate.getMinutes().toString().padStart(2, '0');
         const utcSecs = utcDate.getSeconds().toString().padStart(2, '0');
         const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
-        console.log('Emitting start_rotation with UTC time:', formattedTime);
+        
+        debugLog('Emitting start_rotation with UTC time: ' + formattedTime);
         socket.emit('start_rotation', { time: formattedTime });
     }
 
@@ -285,9 +343,29 @@
         document.getElementById('current-time').innerText =
             now.toLocaleTimeString('ko-KR', { hour12: false });
     }
+    
     setInterval(updateTime, 1000);
 
     window.onload = function() {
+        debugLog('Page loaded');
+        
+        // 디버그 영역 추가
+        const controlsDiv = document.getElementById('controls');
+        if (controlsDiv) {
+            const debugDiv = document.createElement('div');
+            debugDiv.id = 'debug';
+            debugDiv.style.maxHeight = '200px';
+            debugDiv.style.overflow = 'auto';
+            debugDiv.style.marginTop = '20px';
+            debugDiv.style.padding = '10px';
+            debugDiv.style.border = '1px solid #ccc';
+            debugDiv.style.fontSize = '12px';
+            debugDiv.style.fontFamily = 'monospace';
+            debugDiv.style.backgroundColor = '#f9f9f9';
+            debugDiv.style.display = 'block'; // 디버깅 모드 활성화
+            controlsDiv.appendChild(debugDiv);
+        }
+        
         initChart();
         updateTime();
     };
