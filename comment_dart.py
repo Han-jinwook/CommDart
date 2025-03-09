@@ -40,7 +40,7 @@ def load_user(user_id):
         print("[ERROR] load_user:", e)
     return None
 
-# ----- 로그인 폼 (WTForms 사용) -----
+# ----- 로그인 폼 (WTForms만 사용) -----
 class LoginForm(Form):
     username = StringField('ID', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
@@ -116,13 +116,25 @@ if not participants:
     print("[ERROR] Failed to load participants. Exiting...")
     exit()
 
+# ----- colors 리스트도 여기서 생성 -----
+colors = []
+if participants:
+    # participants 개수만큼 색상 생성
+    for i in range(len(participants)):
+        h = i * 360 / len(participants)
+        colors.append(f"hsl({h}, 70%, 50%)")
+
 names = [p[0] for p in participants]
 counts = [p[1] for p in participants]
 total_count = sum(counts)
 
 @app.route('/')
 def index():
-    return render_template('index.html', participants=participants, user=current_user)
+    # 템플릿에 colors 변수를 넘겨줌
+    return render_template('index.html',
+                           participants=participants,
+                           colors=colors,
+                           user=current_user)
 
 # ----- 게임 로직 -----
 games = {}
@@ -152,7 +164,6 @@ def handle_start_rotation(data):
         return
 
     print("DEBUG: now =", now, "target_time =", game['target_time'])
-
     if game['target_time'] <= now:
         socketio.emit('error', {'message': '미래 시각을 입력해주세요.'}, namespace='/')
         return
@@ -167,7 +178,6 @@ def handle_start_rotation(data):
 def rotate(user_id):
     if user_id not in games:
         return
-
     game = games[user_id]
     while game['running']:
         now = datetime.datetime.utcnow()
@@ -181,7 +191,6 @@ def rotate(user_id):
             socketio.emit('play_fanfare', namespace='/')
             break
 
-        # time_left에 따라 회전 속도 조절 (1 ~ 6 범위)
         speed = max(1, min(6, time_left * 2))
         game['current_angle'] += random.uniform(1, speed)
         game['current_angle'] %= 360
@@ -192,7 +201,7 @@ def rotate(user_id):
         eventlet.sleep(0.05)
 
 def calculate_winner(final_angle):
-    # 화살표가 3시(0도) 방향에 고정
+    # 화살표가 3시(0도) 방향
     pointer_angle = final_angle % 360
     cumulative_angle = 0.0
     for name, count in zip(names, counts):
@@ -211,7 +220,6 @@ def in_arc_range(x, start, end):
     else:
         return x >= start or x < end
 
-# Render에서 포트를 감지할 수 있도록
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=True)
