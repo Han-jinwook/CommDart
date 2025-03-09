@@ -164,37 +164,39 @@
     const socket = io();
     let chart;
 
-    function initChart() {
-        Chart.register(ChartDataLabels);
-        const ctx = document.getElementById('dart-chart').getContext('2d');
-        chart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
-                datasets: [{
-                    data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
-                    backgroundColor: generateColors({{ participants|length }})
-                }]
+function initChart() {
+    Chart.register(ChartDataLabels);
+    const ctx = document.getElementById('dart-chart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
+            datasets: [{
+                data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
+                backgroundColor: generateColors({{ participants|length }})
+            }]
+        },
+        options: {
+            rotation: 0,
+            // 애니메이션 관련 옵션 모두 비활성화
+            animation: { duration: 0 },
+            transitions: { active: { animation: { duration: 0 } } },
+            responsiveAnimationDuration: 0,
+            plugins: {
+                legend: { display: false },
+                tooltip: { enabled: false },
+                datalabels: {
+                    color: '#000',
+                    formatter: function(value, context) {
+                        return context.chart.data.labels[context.dataIndex];
+                    },
+                    font: { size: 14 }
+                }
             },
-            options: {
-                rotation: 0,
-                animation: { duration: 0 },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { enabled: false },
-                    datalabels: {
-                        color: '#000',
-                        formatter: function(value, context) {
-                            return context.chart.data.labels[context.dataIndex];
-                        },
-                        font: { size: 14 }
-                    }
-                },
-                cutout: '60%'
-            }
-        });
-    }
-
+            cutout: '60%'
+        }
+    });
+}
     function generateColors(count) {
         const colors = [];
         for (let i = 0; i < count; i++) {
