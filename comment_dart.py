@@ -7,7 +7,8 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, curren
 from wtforms import Form, StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired
 
-from flask_socketio import SocketIO, emit
+# 여기서 emit 대신 SocketIO만 임포트
+from flask_socketio import SocketIO
 import eventlet
 eventlet.monkey_patch()
 
@@ -17,7 +18,7 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 # Flask-SocketIO (eventlet 모드)
 socketio = SocketIO(app, async_mode='eventlet')
 
-# ----- 로그인 매니저 설정 -----
+# ----- 로그인 매니저 -----
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -40,7 +41,7 @@ def load_user(user_id):
         pass
     return None
 
-# ----- 로그인 폼 (WTForms 사용) -----
+# ----- 로그인 폼 (WTForms만 사용) -----
 class LoginForm(Form):
     username = StringField('ID', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
@@ -155,14 +156,15 @@ def handle_start_rotation(data):
     try:
         game['target_time'] = datetime.datetime.strptime(target_today_str, '%Y-%m-%d %H:%M:%S')
     except ValueError:
-        emit('error', {'message': '시간 형식이 잘못되었습니다. HH:MM:SS (UTC) 형식으로 입력.'}, broadcast=True)
+        socketio.emit('error', {'message': '시간 형식이 잘못되었습니다. HH:MM:SS (UTC) 형식으로 입력.'},
+                      broadcast=True, namespace='/')
         return
 
-    # 디버그 로그로 확인
     print("DEBUG: now =", now, "target_time =", game['target_time'])
 
     if game['target_time'] <= now:
-        emit('error', {'message': '미래 시각을 입력해주세요.'}, broadcast=True)
+        socketio.emit('error', {'message': '미래 시각을 입력해주세요.'},
+                      broadcast=True, namespace='/')
         return
 
     # 회전 시작
@@ -170,12 +172,13 @@ def handle_start_rotation(data):
     game['final_winner'] = None
     game['current_angle'] = 0.0
 
-    emit('play_beep', broadcast=True)
+    socketio.emit('play_beep', broadcast=True, namespace='/')
     socketio.start_background_task(rotate, user_id)
 
 def rotate(user_id):
     if user_id not in games:
         return
+
     game = games[user_id]
     while game['running']:
         now = datetime.datetime.utcnow()
@@ -187,8 +190,9 @@ def rotate(user_id):
             game['current_angle'] %= 360
             winner = calculate_winner(game['current_angle'])
             game['final_winner'] = winner
-            emit('update_winner', {'winner': winner}, broadcast=True)
-            emit('play_fanfare', broadcast=True)
+            socketio.emit('update_winner', {'winner': winner},
+                          broadcast=True, namespace='/')
+            socketio.emit('play_fanfare', broadcast=True, namespace='/')
             break
 
         # time_left에 따라 회전 속도 조절 (1 ~ 6 범위)
@@ -199,14 +203,14 @@ def rotate(user_id):
         game['current_angle'] %= 360
 
         # 회전 상황 실시간 업데이트
-        emit('update_chart',
-             {'angle': game['current_angle'], 'winner': game['final_winner']},
-             broadcast=True)
+        socketio.emit('update_chart',
+                      {'angle': game['current_angle'], 'winner': game['final_winner']},
+                      broadcast=True, namespace='/')
 
-        socketio.sleep(0.05)
+        eventlet.sleep(0.05)
 
 def calculate_winner(final_angle):
-    # 화살표가 3시(0도) 방향에 고정되어 있다고 가정
+    # 화살표가 3시(0도) 방향에 고정된 상태
     pointer_angle = final_angle % 360
     cumulative_angle = 0.0
     for name, count in zip(names, counts):
@@ -226,4 +230,5 @@ def in_arc_range(x, start, end):
         return x >= start or x < end
 
 if __name__ == '__main__':
+    # debug=True로 하면 코드 수정 시 자동 재시작
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)
