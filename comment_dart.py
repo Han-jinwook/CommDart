@@ -19,8 +19,7 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 CORS(app)
 
 # SocketIO 객체 수정
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
-
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", engineio_logger=True, logger=True)
 
 # ----- 로그인 매니저 설정 -----
 login_manager = LoginManager()
