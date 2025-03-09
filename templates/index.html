@@ -40,19 +40,18 @@
             width: 600px;
             height: 600px;
         }
-        /* 굵고 긴 화살표(삼각형) */
+        /* 화살표를 크게, 3시 방향 (오른쪽 중앙)에 배치 */
         #pointer {
             position: absolute;
-            left: 50%;  /* 도넛 차트 중심 */
+            right: -80px;     /* 차트 컨테이너 오른쪽 바깥으로 살짝 빼서 */
             top: 50%;
             width: 0;
             height: 0;
             border-top: 40px solid transparent;
             border-bottom: 40px solid transparent;
             border-left: 80px solid red;
-            transform: translate(0, -50%);
-            transform-origin: 0 50%;
-            z-index: 10; /* 차트 위에 표시 */
+            transform: translateY(-50%);
+            z-index: 10;
         }
 
         #legend-container {
@@ -85,168 +84,3 @@
             margin: 0 5px;
             padding: 10px;
             font-size: 16px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        button {
-            padding: 12px 25px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            border-radius: 5px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        #current-time {
-            font-size: 1.2em;
-            color: #333;
-            margin-bottom: 10px;
-        }
-        #winner {
-            font-size: 1.5em;
-            color: #ff4500;
-            margin-top: 10px;
-            text-align: center;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-    <div id="header">
-        <h1>썬드림 댓글 다트 로또게임 (Sundream Comment Dart Lotto)</h1>
-        {% if user.is_authenticated %}
-            <a href="{{ url_for('logout') }}" id="logout">로그아웃</a>
-        {% endif %}
-    </div>
-    <div id="controls">
-        <p>현재 시간: <span id="current-time"></span></p>
-        {% if user.is_authenticated %}
-            <div id="main-container">
-                <div id="chart-container">
-                    <canvas id="dart-chart"></canvas>
-                    <!-- 길고 굵은 화살표를 3시 방향으로 고정 -->
-                    <div id="pointer"></div>
-                </div>
-                <div id="legend-container">
-                    <div class="legend-item">
-                        <span class="legend-color" style="background-color: transparent;"></span>
-                        <strong>별명 / 댓글수</strong>
-                    </div>
-                    {% for p in participants %}
-                        <div class="legend-item">
-                            <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
-                            {{ p[0] }} / {{ p[1] }}
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-            <div id="time-input-container">
-                <input type="time" id="target-time" value="04:44">
-                <button id="start-button" onclick="startRotation()">시작</button>
-            </div>
-            <h2 id="winner"></h2>
-        {% else %}
-            <p>로그인이 필요합니다. <a href="{{ url_for('login') }}">로그인</a></p>
-        {% endif %}
-    </div>
-
-    <!-- Chart.js + DataLabels + socket.io -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
-    <script>
-        const socket = io();
-        let chart;
-
-        function initChart() {
-            Chart.register(ChartDataLabels);
-            const ctx = document.getElementById('dart-chart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
-                    datasets: [{
-                        data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
-                        backgroundColor: generateColors({{ participants|length }})
-                    }]
-                },
-                options: {
-                    rotation: 0,
-                    animation: { duration: 0 },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { enabled: false },
-                        datalabels: {
-                            color: '#000',
-                            formatter: function(value, context) {
-                                return context.chart.data.labels[context.dataIndex];
-                            },
-                            font: { size: 14 }
-                        }
-                    },
-                    cutout: '60%'
-                }
-            });
-        }
-
-        function generateColors(count) {
-            const colors = [];
-            for (let i = 0; i < count; i++) {
-                colors.push(`hsl(${i * 360 / count}, 70%, 50%)`);
-            }
-            return colors;
-        }
-
-        // 소켓 이벤트
-        socket.on('update_chart', function(data) {
-            // 원판 회전 (도넛 차트 rotation)
-            chart.options.rotation = -data.angle * Math.PI / 180;
-            chart.update();
-            // 회전 중에도 winner가 있으면 표시
-            if (data.winner) {
-                document.getElementById('winner').innerText = '당첨자: ' + data.winner;
-            }
-        });
-
-        socket.on('update_winner', function(data) {
-            // 최종 당첨자
-            document.getElementById('winner').innerText = '당첨자: ' + data.winner;
-        });
-
-        socket.on('error', function(data) {
-            alert(data.message);
-        });
-
-        socket.on('play_beep', function() {
-            new Audio('/static/beep.wav').play().catch(() => console.log('Beep audio failed'));
-        });
-
-        socket.on('play_fanfare', function() {
-            new Audio('/static/fanfare.wav').play().catch(() => console.log('Fanfare audio failed'));
-        });
-
-        function startRotation() {
-            const timeInput = document.getElementById('target-time').value;
-            if (!timeInput) {
-                alert('시간을 입력해주세요.');
-                return;
-            }
-            // 로컬 시각(HH:MM) -> Date 객체
-            const [localH, localM] = timeInput.split(':').map(Number);
-            const localDate = new Date();
-            localDate.setHours(localH, localM, 0, 0);
-
-            // 로컬 -> UTC 변환
-            const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
-            const utcDate = new Date(utcMs);
-
-            const utcHours = utcDate.getHours().toString().padStart(2, '0');
-            const utcMins = utcDate.getMinutes().toString().padStart(2, '0');
-      
