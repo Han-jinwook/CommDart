@@ -231,12 +231,16 @@
     // 이 부분이 중요합니다 - update_chart 이벤트 핸들러
 socket.on('update_chart', function(data) {
     // 차트 회전
-    chart.options.rotation = -data.angle * Math.PI / 180;
-    chart.update();
+    console.log('Rotating to angle: ' + data.angle.toFixed(1)); // 디버깅용
     
+    // 회전 각도 설정 (음수로 지정해야 시계 방향 회전)
+    chart.options.rotation = (-data.angle * Math.PI / 180) % (Math.PI * 2);
+    
+    // 중요: 애니메이션 없이 즉시 업데이트
+    chart.update('none');
     
     if (data.winner) {
-        document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
+        document.getElementById('winner').innerText = '당첨자: ' + data.winner;
     }
 });
 
