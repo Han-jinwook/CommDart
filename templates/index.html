@@ -202,22 +202,23 @@
                 backgroundColor: generateColors({{ participants|length }})
             }]
         },
-        options: {
-            rotation: 0, // 회전 각도 0으로 고정
-            animation: false, // 애니메이션 비활성화
-            plugins: {
-                legend: { display: false },
-                tooltip: { enabled: false },
-                datalabels: {
-                    color: '#000',
-                    formatter: function(value, context) {
-                        return context.chart.data.labels[context.dataIndex];
-                    },
-                    font: { size: 14 }
-                }
+options: {
+    rotation: 0,
+    animation: false, // 애니메이션 비활성화
+    responsiveAnimationDuration: 0, // 반응형 애니메이션도 비활성화
+    plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false },
+        datalabels: {
+            color: '#000',
+            formatter: function(value, context) {
+                return context.chart.data.labels[context.dataIndex];
             },
-            cutout: '60%'
+            font: { size: 14 }
         }
+    },
+    cutout: '60%'
+}
     });
 }
     function generateColors(count) {
