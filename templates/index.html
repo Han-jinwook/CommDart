@@ -40,19 +40,19 @@
             width: 600px;
             height: 600px;
         }
-        /* 3시 방향 고정 화살표: 오른쪽 외부에 크게 표시 */
+        /* 가는 막대 화살표: 원판 중심 → 3시 방향 */
         #pointer {
             position: absolute;
-            right: -90px;  /* 차트 오른쪽 밖으로 이동 */
-            top: 50%;
-            width: 0;
-            height: 0;
-            border-top: 50px solid transparent;
-            border-bottom: 50px solid transparent;
-            border-left: 90px solid red;
-            transform: translateY(-50%);
-            z-index: 10;
+            left: 50%;       /* 수평 중앙 */
+            top: 50%;        /* 수직 중앙 */
+            width: 200px;    /* 화살표 길이 */
+            height: 2px;     /* 화살표 두께 */
+            background: red; /* 화살표 색깔 */
+            transform-origin: 0 50%; /* 왼쪽 가운데를 기준으로 회전/배치 */
+            transform: translate(0, -50%);
+            z-index: 10;     /* 차트 위에 표시 */
         }
+
         #legend-container {
             margin-left: 50px;
             text-align: left;
@@ -118,7 +118,7 @@
 </head>
 <body>
     <div id="header">
-        <h1>썬드림 댓글 다트 로또게임 (Sundream Comment Dart Lotto)</h1>
+        <h1>썬드림 댓글 다트 로또게임</h1>
         {% if user.is_authenticated %}
             <a href="{{ url_for('logout') }}" id="logout">로그아웃</a>
         {% endif %}
@@ -129,7 +129,7 @@
             <div id="main-container">
                 <div id="chart-container">
                     <canvas id="dart-chart"></canvas>
-                    <!-- 고정 화살표 -->
+                    <!-- 가는 막대 화살표 (3시 방향) -->
                     <div id="pointer"></div>
                 </div>
                 <div id="legend-container">
@@ -155,7 +155,7 @@
         {% endif %}
     </div>
 
-    <!-- Chart.js, DataLabels 플러그인, Socket.IO 클라이언트 -->
+    <!-- Chart.js + DataLabels + socket.io -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
@@ -164,6 +164,7 @@
         let chart;
 
         function initChart() {
+            // DataLabels 플러그인 등록
             Chart.register(ChartDataLabels);
             const ctx = document.getElementById('dart-chart').getContext('2d');
             chart = new Chart(ctx, {
@@ -176,7 +177,7 @@
                     }]
                 },
                 options: {
-                    rotation: 0, // 초기 회전은 0도 (3시 방향)
+                    rotation: 0, // 초기 회전 0도 (3시 방향)
                     animation: { duration: 0 },
                     plugins: {
                         legend: { display: false },
@@ -184,6 +185,7 @@
                         datalabels: {
                             color: '#000',
                             formatter: function(value, context) {
+                                // 섹터 위에 별명 표시
                                 return context.chart.data.labels[context.dataIndex];
                             },
                             font: { size: 14 }
@@ -202,6 +204,7 @@
             return colors;
         }
 
+        // 서버에서 회전 각도/당첨자 정보 받음
         socket.on('update_chart', function(data) {
             chart.options.rotation = -data.angle * Math.PI / 180;
             chart.update();
@@ -232,15 +235,20 @@
                 alert('시간을 입력해주세요.');
                 return;
             }
+            // 로컬 시각(HH:MM) → Date 객체
             const [localH, localM] = timeInput.split(':').map(Number);
             const localDate = new Date();
             localDate.setHours(localH, localM, 0, 0);
+
+            // 로컬 → UTC 변환
             const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
             const utcDate = new Date(utcMs);
+
             const utcHours = utcDate.getHours().toString().padStart(2, '0');
             const utcMins = utcDate.getMinutes().toString().padStart(2, '0');
             const utcSecs = utcDate.getSeconds().toString().padStart(2, '0');
             const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
+
             console.log('Emitting start_rotation with UTC time:', formattedTime);
             socket.emit('start_rotation', { time: formattedTime });
         }
