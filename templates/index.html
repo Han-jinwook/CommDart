@@ -41,17 +41,17 @@
             height: 600px;
         }
         /* 가는 막대 화살표: 3시 방향 */
-        #pointer {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            width: 200px;   /* 화살표 길이 */
-            height: 2px;    /* 화살표 두께 */
-            background: red;
-            transform-origin: 0 50%;
-            transform: translate(0, -50%);
-            z-index: 10;
-        }
+#pointer {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 200px;
+    height: 2px;
+    background: red;
+    transform-origin: left center;
+    transform: translate(0, -50%);
+    z-index: 10;
+}
         #legend-container {
             margin-left: 50px;
             text-align: left;
@@ -150,6 +150,7 @@
                 <button id="start-button" onclick="startRotation()">시작</button>
             </div>
             <h2 id="winner"></h2>
+            <div id="debug" style="display: none;"></div>
         {% else %}
             <p>로그인이 필요합니다. <a href="{{ url_for('login') }}">로그인</a></p>
         {% endif %}
@@ -209,12 +210,18 @@
 
         // 서버에서 각도/당첨자 정보 받음
         socket.on('update_chart', function(data) {
+            document.getElementById('debug').textContent = 'Angle: ' + data.angle.toFixed(1);
             chart.options.rotation = -data.angle * Math.PI / 180;
             chart.update();
-            if (data.winner) {
-                document.getElementById('winner').innerText = '당첨자: ' + data.winner;
-            }
-        });
+ if (data.winner) {
+        document.getElementById('winner').innerText = '당첨자: ' + data.winner;
+        return; // 당첨자가 있으면 회전 중지
+    }
+    
+    // 중요: 포인터만 회전시키고 차트는 고정
+    document.getElementById('pointer').style.transform = 
+        `rotate(${data.angle}deg) translate(0, -50%)`;
+});
 
         socket.on('update_winner', function(data) {
             document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
