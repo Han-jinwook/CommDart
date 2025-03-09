@@ -52,27 +52,27 @@
 #pointer {
     position: absolute;
     left: 50%;
-    top: 0; /* 변경: 50%에서 0으로 */
-    width: 2px; /* 변경: 가로세로 바꿈 */
-    height: 120px; /* 변경: 가로세로 바꿈 */
+    top: 50%;
+    width: 200px;
+    height: 2px;
     background: red;
-    transform-origin: bottom center; /* 변경 */
-    transform: translateX(-50%); /* 변경 */
+    transform-origin: 0 50%;
+    transform: translate(0, -50%);
     z-index: 10;
 }
 
-/* 화살표 머리 추가 */
+/* 화살표 머리 - 3시 방향에 맞게 수정 */
 #pointer::after {
     content: '';
     position: absolute;
-    top: -10px; /* 변경 */
-    left: 50%; /* 변경 */
-    transform: translateX(-50%); /* 변경 */
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
     width: 0;
     height: 0;
-    border-bottom: 10px solid red; /* 변경 */
-    border-left: 7px solid transparent;
-    border-right: 7px solid transparent;
+    border-left: 10px solid red;
+    border-top: 7px solid transparent;
+    border-bottom: 7px solid transparent;
 }
         #legend-container {
             margin-left: 50px;
