@@ -40,7 +40,6 @@
             width: 600px;
             height: 600px;
         }
-        /* 수동 chart-label 영역 제거함 (DataLabels 플러그인 사용) */
         #legend-container {
             margin-left: 50px;
             text-align: left;
@@ -141,19 +140,16 @@
         {% endif %}
     </div>
 
-    <!-- Chart.js & DataLabels 플러그인 & socket.io -->
+    <!-- Chart.js, DataLabels 플러그인, Socket.IO 클라이언트 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
-
     <script>
         const socket = io();
         let chart;
 
         function initChart() {
-            // DataLabels 플러그인 전역 등록
             Chart.register(ChartDataLabels);
-
             const ctx = document.getElementById('dart-chart').getContext('2d');
             chart = new Chart(ctx, {
                 type: 'doughnut',
@@ -166,26 +162,16 @@
                 },
                 options: {
                     rotation: 0,
-                    animation: {
-                        duration: 0
-                    },
+                    animation: { duration: 0 },
                     plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            enabled: false
-                        },
+                        legend: { display: false },
+                        tooltip: { enabled: false },
                         datalabels: {
                             color: '#000',
                             formatter: function(value, context) {
-                                // 별명 표시
-                                const label = context.chart.data.labels[context.dataIndex];
-                                return label;
+                                return context.chart.data.labels[context.dataIndex];
                             },
-                            font: {
-                                size: 14
-                            }
+                            font: { size: 14 }
                         }
                     },
                     cutout: '60%'
@@ -201,12 +187,9 @@
             return colors;
         }
 
-        // 소켓 이벤트
         socket.on('update_chart', function(data) {
-            // 회전 각도 업데이트
             chart.options.rotation = -data.angle * Math.PI / 180;
             chart.update();
-
             if (data.winner) {
                 document.getElementById('winner').innerText = '당첨자: ' + data.winner;
             }
@@ -228,41 +211,27 @@
             new Audio('/static/fanfare.wav').play().catch(() => console.log('Fanfare audio failed'));
         });
 
-        // "시작" 버튼
         function startRotation() {
             const timeInput = document.getElementById('target-time').value;
             if (!timeInput) {
                 alert('시간을 입력해주세요.');
                 return;
             }
-            // timeInput 예: "09:30" (로컬)
-            // 로컬 -> UTC 변환
+            // 로컬 시각 (HH:MM) -> 오늘 날짜로 Date 객체 생성
             const [localH, localM] = timeInput.split(':').map(Number);
-
-            // 오늘 날짜(로컬) 기준 Date 객체
             const localDate = new Date();
-            localDate.setHours(localH);
-            localDate.setMinutes(localM);
-            localDate.setSeconds(0);
-            localDate.setMilliseconds(0);
-
-            // getTimezoneOffset()는 분 단위(한국 KST는 -540)
-            const offsetMinutes = localDate.getTimezoneOffset();
-            // UTC로 변환 (로컬 시각 + offset)
-            const utcMs = localDate.getTime() + offsetMinutes * 60 * 1000;
+            localDate.setHours(localH, localM, 0, 0);
+            // 로컬 시각을 UTC로 변환: UTC = localDate.getTime() + (timezoneOffset in ms)
+            const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
             const utcDate = new Date(utcMs);
-
-            // HH:MM:SS (UTC)
             const utcHours = utcDate.getHours().toString().padStart(2, '0');
             const utcMins = utcDate.getMinutes().toString().padStart(2, '0');
             const utcSecs = utcDate.getSeconds().toString().padStart(2, '0');
             const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
-
             console.log('Sending start_rotation with UTC time:', formattedTime);
             socket.emit('start_rotation', { time: formattedTime });
         }
 
-        // 현재 시간 표시 (로컬)
         function updateTime() {
             const now = new Date();
             document.getElementById('current-time').innerText = now.toLocaleTimeString('ko-KR', { hour12: false });
