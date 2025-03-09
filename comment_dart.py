@@ -101,4 +101,4 @@ def load_participants(filename="participants.txt"):
             except ValueError:
                 count = 1.0
             participants_dict[name] = participants_dict.get(name, 0) + count
-        participants = [(name, int(count)) for name, count in part
+        participants = [(name, int(count)) for name, count in participants_dict.items()]
