@@ -42,16 +42,31 @@
         }
         /* 가는 막대 화살표: 원판 중심(50%,50%)에서 오른쪽(3시 방향)으로 200px 길이 */
         #pointer {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            width: 200px;
-            height: 2px;
-            background: red;
-            transform-origin: 0 50%;
-            transform: translate(0, -50%);
-            z-index: 10;
-        }
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 120px; /* 더 짧게 조정 */
+    height: 3px; /* 약간 두껍게 */
+    background: red;
+    transform-origin: 0 50%;
+    transform: translate(0, -50%);
+    z-index: 10;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5); /* 그림자 추가 */
+}
+
+/* 화살표 머리 추가 */
+#pointer::after {
+    content: '';
+    position: absolute;
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 10px solid red;
+    border-top: 7px solid transparent;
+    border-bottom: 7px solid transparent;
+}
         #legend-container {
             margin-left: 50px;
             text-align: left;
@@ -225,36 +240,49 @@
             new Audio('/static/fanfare.wav').play().catch(() => console.log('Fanfare audio failed'));
         });
 
-        function startRotation() {
-            const timeInput = document.getElementById('target-time').value;
-            if (!timeInput) {
-                alert('시간을 입력해주세요.');
-                return;
-            }
-            const [localH, localM] = timeInput.split(':').map(Number);
-            const localDate = new Date();
-            localDate.setHours(localH, localM, 0, 0);
-            const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
-            const utcDate = new Date(utcMs);
-            const utcHours = utcDate.getHours().toString().padStart(2, '0');
-            const utcMins = utcDate.getMinutes().toString().padStart(2, '0');
-            const utcSecs = utcDate.getSeconds().toString().padStart(2, '0');
-            const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
-            console.log('Emitting start_rotation with UTC time:', formattedTime);
-            socket.emit('start_rotation', { time: formattedTime });
-        }
+        // 변수 추가 (다른 스크립트 변수 근처에 배치)
+let rotationInProgress = false;
 
-        function updateTime() {
-            const now = new Date();
-            document.getElementById('current-time').innerText =
-                now.toLocaleTimeString('ko-KR', { hour12: false });
-        }
-        setInterval(updateTime, 1000);
+// startRotation 함수를 아래 코드로 교체
+function startRotation() {
+    // 중복 클릭 방지
+    if (rotationInProgress) return;
+    
+    const timeInput = document.getElementById('target-time').value;
+    if (!timeInput) {
+        alert('시간을 입력해주세요.');
+        return;
+    }
+    
+    // 버튼 비활성화 및 플래그 설정
+    document.getElementById('start-button').disabled = true;
+    rotationInProgress = true;
+    
+    const [localH, localM] = timeInput.split(':').map(Number);
+    const localDate = new Date();
+    localDate.setHours(localH, localM, 0, 0);
+    const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
+    const utcDate = new Date(utcMs);
+    const utcHours = utcDate.getHours().toString().padStart(2, '0');
+    const utcMins = utcDate.getMinutes().toString().padStart(2, '0');
+    const utcSecs = utcDate.getSeconds().toString().padStart(2, '0');
+    const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
+    console.log('Emitting start_rotation with UTC time:', formattedTime);
+    socket.emit('start_rotation', { time: formattedTime });
+}
 
-        window.onload = function() {
-            initChart();
-            updateTime();
-        };
+// 이벤트 핸들러 수정
+socket.on('update_winner', function(data) {
+    document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
+    document.getElementById('start-button').disabled = false;
+    rotationInProgress = false;
+});
+
+socket.on('error', function(data) {
+    alert(data.message);
+    document.getElementById('start-button').disabled = false;
+    rotationInProgress = false;
+});
     </script>
 </body>
 </html>
