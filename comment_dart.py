@@ -230,21 +230,23 @@ def rotate(user_id):
         eventlet.sleep(0.05)
 
 def calculate_winner(final_angle):
-    # 화살표는 3시 방향(0도)에 고정되어 있음
-    # 원판이 시계방향으로 회전하므로, 화살표가 가리키는 위치는 회전 각도와 정확히 일치
-    pointer_angle = final_angle % 360
-    print(f"Final angle: {final_angle}, Pointer angle: {pointer_angle}")
+    # 화살표가 가리키는 위치 계산 (반대 방향)
+    pointer_angle = (360 - final_angle) % 360
     
-    # 디버깅: 각 섹터의 범위 출력
+    # 각 섹터를 순회하며 화살표가 가리키는 섹터 찾기
     cumulative_angle = 0.0
-    sectors = []
     for name, cnt in zip(names, counts):
         portion = cnt / total_count
         sector_angle = portion * 360.0
-        seg_start = cumulative_angle % 360
-        seg_end = (cumulative_angle + sector_angle) % 360
-        sectors.append((name, seg_start, seg_end))
+        sector_start = cumulative_angle % 360
+        sector_end = (cumulative_angle + sector_angle) % 360
+        
+        if in_arc_range(pointer_angle, sector_start, sector_end):
+            return name
+        
         cumulative_angle += sector_angle
+    
+    return names[-1]
     
     # 정렬해서 보기 쉽게 출력
     print("All sectors:")
