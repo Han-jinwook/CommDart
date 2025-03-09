@@ -218,6 +218,7 @@
 
         socket.on('error', function(data) {
             alert(data.message);
+            document.getElementById('start-button').disabled = false;
         });
 
         socket.on('play_beep', function() {
