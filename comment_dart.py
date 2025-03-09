@@ -182,9 +182,16 @@ def rotate(user_id):
     if user_id not in games:
         return
     game = games[user_id]
+    
+    # 회전 시작 시간 저장
+    start_time = datetime.datetime.utcnow()
+    total_duration = (game['target_time'] - start_time).total_seconds()
+    
     while game['running']:
         now = datetime.datetime.utcnow()
         time_left = (game['target_time'] - now).total_seconds()
+        elapsed = total_duration - time_left
+        
         if time_left <= 0:
             game['running'] = False
             game['current_angle'] %= 360
@@ -193,27 +200,46 @@ def rotate(user_id):
             socketio.emit('update_winner', {'winner': winner}, namespace='/')
             socketio.emit('play_fanfare', namespace='/')
             break
-
-        # 속도를 크게 조정 (중요: 적절한 속도 설정)
-        speed = max(3, min(30, time_left * 10))
+        
+        # 속도 조정 로직
+        acceleration_time = min(5.0, total_duration / 3)  # 초반 가속 시간 (최대 5초)
+        deceleration_time = min(5.0, total_duration / 3)  # 후반 감속 시간 (최대 5초)
+        
+        if elapsed < acceleration_time:
+            # 초반 가속 단계 - 천천히 시작해서 빨라짐
+            speed_factor = elapsed / acceleration_time  # 0에서 1로 증가
+            max_speed = 30
+            speed = max(3, max_speed * speed_factor)
+        elif time_left < deceleration_time:
+            # 후반 감속 단계 - 점점 느려짐
+            speed_factor = time_left / deceleration_time  # 1에서 0으로 감소
+            max_speed = 30
+            speed = max(1, max_speed * speed_factor)
+        else:
+            # 중간 최대 속도 단계
+            speed = 30
+        
         angle_step = random.uniform(speed * 0.5, speed)
         game['current_angle'] += angle_step
         game['current_angle'] %= 360
-
+        
         socketio.emit('update_chart',
-                      {'angle': game['current_angle'], 'winner': game['final_winner']},
-                      namespace='/')
-        eventlet.sleep(0.05)  # 업데이트 간격 (이 값도 중요)
+                     {'angle': game['current_angle'], 'winner': game['final_winner']},
+                     namespace='/')
+        eventlet.sleep(0.05)
 
 def calculate_winner(final_angle):
-    # 3시 방향(0도)를 기준으로 당첨자 계산
-    pointer_angle = final_angle % 360
+    # 변경: 3시 방향(0도)이 아닌 12시 방향(270도)를 기준으로 계산
+    pointer_angle = (final_angle + 270) % 360  # 270도 보정
+    print(f"Final angle: {final_angle}, Pointer angle: {pointer_angle}")
+    
     cumulative_angle = 0.0
     for name, cnt in zip(names, counts):
         portion = cnt / total_count
         sector_angle = portion * 360.0
         seg_start = cumulative_angle % 360
         seg_end = (cumulative_angle + sector_angle) % 360
+        
         if in_arc_range(pointer_angle, seg_start, seg_end):
             return name
         cumulative_angle += sector_angle
