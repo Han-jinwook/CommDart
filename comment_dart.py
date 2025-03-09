@@ -14,6 +14,7 @@ eventlet.monkey_patch()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 
+# Flask-SocketIO (eventlet 모드)
 socketio = SocketIO(app, async_mode='eventlet')
 
 # ----- 로그인 매니저 설정 -----
@@ -39,7 +40,7 @@ def load_user(user_id):
         pass
     return None
 
-# ----- 로그인 폼 (WTForms만 사용) -----
+# ----- 로그인 폼 (WTForms 사용) -----
 class LoginForm(Form):
     username = StringField('ID', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
@@ -100,8 +101,9 @@ def load_participants(filename="participants.txt"):
             except ValueError:
                 count = 1.0
             participants_dict[name] = participants_dict.get(name, 0) + count
-
         participants = [(name, int(count)) for name, count in participants_dict.items()]
+
+        # 별명 100개 이상이면, 1~100까지 숫자로 대체
         if len(participants) > 100:
             participants = [(f"{i+1}", count) for i, (name, count) in enumerate(participants)]
         return participants
@@ -129,21 +131,26 @@ def index():
         colors=colors
     )
 
-# ----- 게임 로직 관리 -----
+# ----- 회전 게임 로직 -----
 games = {}
 
 @socketio.on('start_rotation')
 def handle_start_rotation(data):
     """
-    클라이언트가 보내는 data: { time: "HH:MM:SS" }  (UTC 기준)
+    data = { time: "HH:MM:SS" } (UTC 기준)
     """
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
     if user_id not in games:
-        games[user_id] = {'running': False, 'target_time': None, 'current_angle': 0.0, 'final_winner': None}
+        games[user_id] = {
+            'running': False,
+            'target_time': None,
+            'current_angle': 0.0,
+            'final_winner': None
+        }
     game = games[user_id]
 
     t_str = data['time']
-    now = datetime.datetime.utcnow()  # 서버 현재 UTC 시각
+    now = datetime.datetime.utcnow()  # 서버 현재 시각 (UTC)
     target_today_str = now.strftime('%Y-%m-%d') + ' ' + t_str
     try:
         game['target_time'] = datetime.datetime.strptime(target_today_str, '%Y-%m-%d %H:%M:%S')
@@ -151,12 +158,14 @@ def handle_start_rotation(data):
         emit('error', {'message': '시간 형식이 잘못되었습니다. HH:MM:SS (UTC) 형식으로 입력.'}, broadcast=True)
         return
 
-    # 디버그 로그: 현재 UTC 시각과 목표 시각
+    # 디버그 로그로 확인
     print("DEBUG: now =", now, "target_time =", game['target_time'])
+
     if game['target_time'] <= now:
         emit('error', {'message': '미래 시각을 입력해주세요.'}, broadcast=True)
         return
 
+    # 회전 시작
     game['running'] = True
     game['final_winner'] = None
     game['current_angle'] = 0.0
@@ -171,7 +180,9 @@ def rotate(user_id):
     while game['running']:
         now = datetime.datetime.utcnow()
         time_left = (game['target_time'] - now).total_seconds()
+
         if time_left <= 0:
+            # 회전 종료
             game['running'] = False
             game['current_angle'] %= 360
             winner = calculate_winner(game['current_angle'])
@@ -179,16 +190,24 @@ def rotate(user_id):
             emit('update_winner', {'winner': winner}, broadcast=True)
             emit('play_fanfare', broadcast=True)
             break
+
+        # time_left에 따라 회전 속도 조절 (1 ~ 6 범위)
         speed = max(1, min(6, time_left * 2))
+
+        # 랜덤 각도 누적
         game['current_angle'] += random.uniform(1, speed)
         game['current_angle'] %= 360
-        emit('update_chart', {'angle': game['current_angle'], 'winner': game['final_winner']}, broadcast=True)
+
+        # 회전 상황 실시간 업데이트
+        emit('update_chart',
+             {'angle': game['current_angle'], 'winner': game['final_winner']},
+             broadcast=True)
+
         socketio.sleep(0.05)
 
 def calculate_winner(final_angle):
-    # 포인터(화살표)는 3시(0°)에 고정되어 있음.
-    # 회전 후의 누적 각도(final_angle)가 곧 효과적 winning angle (즉, final_angle mod 360)이 됨.
-    pointer_angle = final_angle % 360  # 이 값이 원래 도넛 차트 기준 winning position (3시 방향)에 해당함.
+    # 화살표가 3시(0도) 방향에 고정되어 있다고 가정
+    pointer_angle = final_angle % 360
     cumulative_angle = 0.0
     for name, count in zip(names, counts):
         portion = count / total_count
