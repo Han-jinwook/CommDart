@@ -45,8 +45,8 @@
             position: absolute;
             left: 50%;
             top: 50%;
-            width: 200px;  /* 화살표 길이 */
-            height: 2px;   /* 화살표 두께 */
+            width: 200px;   /* 화살표 길이 */
+            height: 2px;    /* 화살표 두께 */
             background: red;
             transform-origin: 0 50%;
             transform: translate(0, -50%);
@@ -128,7 +128,7 @@
             <div id="main-container">
                 <div id="chart-container">
                     <canvas id="dart-chart"></canvas>
-                    <!-- 가는 막대 화살표(3시) -->
+                    <!-- 가는 막대 화살표(3시 방향) -->
                     <div id="pointer"></div>
                 </div>
                 <div id="legend-container">
@@ -138,6 +138,7 @@
                     </div>
                     {% for p in participants %}
                         <div class="legend-item">
+                            <!-- colors[loop.index0]로 레전드 색상 -->
                             <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
                             {{ p[0] }} / {{ p[1] }}
                         </div>
@@ -154,7 +155,7 @@
         {% endif %}
     </div>
 
-    <!-- Chart.js + DataLabels + Socket.IO -->
+    <!-- Chart.js + DataLabels + socket.io -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
@@ -163,7 +164,6 @@
         let chart;
 
         function initChart() {
-            // DataLabels 플러그인 등록
             Chart.register(ChartDataLabels);
             const ctx = document.getElementById('dart-chart').getContext('2d');
             chart = new Chart(ctx, {
@@ -203,18 +203,16 @@
             return colors;
         }
 
+        // 서버에서 각도/당첨자 정보 받음
         socket.on('update_chart', function(data) {
-            // 원판 회전
             chart.options.rotation = -data.angle * Math.PI / 180;
             chart.update();
-            // 회전 중에도 winner 있으면 표시
             if (data.winner) {
                 document.getElementById('winner').innerText = '당첨자: ' + data.winner;
             }
         });
 
         socket.on('update_winner', function(data) {
-            // 최종 당첨자
             document.getElementById('winner').innerText = '당첨자: ' + data.winner;
         });
 
@@ -236,12 +234,12 @@
                 alert('시간을 입력해주세요.');
                 return;
             }
-            // 로컬 시각(HH:MM) → Date 객체
+            // 로컬 시각(HH:MM) -> Date 객체
             const [localH, localM] = timeInput.split(':').map(Number);
             const localDate = new Date();
             localDate.setHours(localH, localM, 0, 0);
 
-            // 로컬 → UTC 변환
+            // 로컬 -> UTC 변환
             const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
             const utcDate = new Date(utcMs);
 
