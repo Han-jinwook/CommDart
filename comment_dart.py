@@ -3,7 +3,7 @@ import random
 import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, flash
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user
 from wtforms import Form, StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired
 
@@ -14,9 +14,10 @@ eventlet.monkey_patch()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 
+# 서버는 eventlet을 이용하여 비동기 처리를 함
 socketio = SocketIO(app, async_mode='eventlet')
 
-# ----- 로그인 매니저 -----
+# ----- 로그인 매니저 설정 -----
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -39,7 +40,7 @@ def load_user(user_id):
         pass
     return None
 
-# ----- 로그인 폼 (WTForms만 사용) -----
+# ----- 로그인 폼 (WTForms 사용, Flask-WTF 제거) -----
 class LoginForm(Form):
     username = StringField('ID', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
@@ -66,10 +67,7 @@ def load_participants(filename="participants.txt"):
             except ValueError:
                 count = 1.0
             participants_dict[name] = participants_dict.get(name, 0) + count
-
         participants = [(name, int(count)) for name, count in participants_dict.items()]
-
-        # 별명 100개 이상이면, 1~100까지 숫자로 대체
         if len(participants) > 100:
             participants = [(f"{i+1}", count) for i, (name, count) in enumerate(participants)]
         return participants
@@ -84,8 +82,6 @@ if not participants:
 names = [p[0] for p in participants]
 counts = [p[1] for p in participants]
 total_count = sum(counts)
-
-# 색상 리스트 (차트 색상)
 colors = [f"hsl({i * 360 / len(participants)}, 70%, 50%)" for i in range(len(participants))]
 
 # ----- Flask Routes -----
@@ -107,7 +103,6 @@ def login():
         if form.validate():
             username = form.username.data
             password = form.password.data
-
             BASE_DIR = os.path.dirname(os.path.abspath(__file__))
             users_file = os.path.join(BASE_DIR, 'users.txt')
             try:
@@ -141,33 +136,24 @@ games = {}
 @socketio.on('start_rotation')
 def handle_start_rotation(data):
     """
-    data = {
-      'time': 'HH:MM:SS'  (UTC 기준)
-    }
+    클라이언트가 보내는 data: { time: "HH:MM:SS" } (UTC 기준)
     """
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
     if user_id not in games:
-        games[user_id] = {
-            'running': False,
-            'target_time': None,
-            'current_angle': 0.0,
-            'final_winner': None
-        }
+        games[user_id] = {'running': False, 'target_time': None, 'current_angle': 0.0, 'final_winner': None}
     game = games[user_id]
 
     t_str = data['time']
-    # 서버도 UTC 기준
-    now = datetime.datetime.utcnow()
-    # 오늘 날짜 + t_str(UTC 시각) → datetime 객체
+    now = datetime.datetime.utcnow()  # 서버 기준 UTC 시각
     target_today_str = now.strftime('%Y-%m-%d') + ' ' + t_str
-
     try:
         game['target_time'] = datetime.datetime.strptime(target_today_str, '%Y-%m-%d %H:%M:%S')
     except ValueError:
-        emit('error', {'message': '시간 형식이 잘못되었습니다. HH:MM:SS 형식(UTC)으로 입력.'}, broadcast=True)
+        emit('error', {'message': '시간 형식이 잘못되었습니다. HH:MM:SS (UTC) 형식으로 입력.'}, broadcast=True)
         return
 
-    # 미래 시각인지 확인
+    # 디버그: 서버 현재 시각과 목표 시각 출력
+    print("DEBUG: now =", now, "target_time =", game['target_time'])
     if game['target_time'] <= now:
         emit('error', {'message': '미래 시각을 입력해주세요.'}, broadcast=True)
         return
@@ -182,14 +168,11 @@ def handle_start_rotation(data):
 def rotate(user_id):
     if user_id not in games:
         return
-
     game = games[user_id]
     while game['running']:
-        now = datetime.datetime.utcnow()  # 계속 UTC
+        now = datetime.datetime.utcnow()
         time_left = (game['target_time'] - now).total_seconds()
-
         if time_left <= 0:
-            # 회전 종료
             game['running'] = False
             game['current_angle'] %= 360
             winner = calculate_winner(game['current_angle'])
@@ -197,17 +180,10 @@ def rotate(user_id):
             emit('update_winner', {'winner': winner}, broadcast=True)
             emit('play_fanfare', broadcast=True)
             break
-
-        # time_left에 따라 속도 조절 (1 ~ 6 범위)
         speed = max(1, min(6, time_left * 2))
         game['current_angle'] += random.uniform(1, speed)
         game['current_angle'] %= 360
-
-        emit('update_chart', {
-            'angle': game['current_angle'],
-            'winner': game['final_winner']
-        }, broadcast=True)
-
+        emit('update_chart', {'angle': game['current_angle'], 'winner': game['final_winner']}, broadcast=True)
         socketio.sleep(0.05)
 
 def calculate_winner(final_angle):
