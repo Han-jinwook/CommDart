@@ -7,7 +7,6 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, curren
 from wtforms import Form, StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired
 
-# 여기서 emit 대신 SocketIO만 임포트
 from flask_socketio import SocketIO
 import eventlet
 eventlet.monkey_patch()
@@ -15,7 +14,7 @@ eventlet.monkey_patch()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 
-# Flask-SocketIO (eventlet 모드)
+# SocketIO 객체 사용 (eventlet 모드)
 socketio = SocketIO(app, async_mode='eventlet')
 
 # ----- 로그인 매니저 -----
@@ -102,133 +101,4 @@ def load_participants(filename="participants.txt"):
             except ValueError:
                 count = 1.0
             participants_dict[name] = participants_dict.get(name, 0) + count
-        participants = [(name, int(count)) for name, count in participants_dict.items()]
-
-        # 별명 100개 이상이면, 1~100까지 숫자로 대체
-        if len(participants) > 100:
-            participants = [(f"{i+1}", count) for i, (name, count) in enumerate(participants)]
-        return participants
-    except:
-        return None
-
-participants = load_participants()
-if not participants:
-    print("[ERROR] Failed to load participants. Check participants.txt.")
-    exit()
-
-names = [p[0] for p in participants]
-counts = [p[1] for p in participants]
-total_count = sum(counts)
-colors = [f"hsl({i * 360 / len(participants)}, 70%, 50%)" for i in range(len(participants))]
-
-@app.route('/')
-def index():
-    return render_template(
-        'index.html',
-        participants=participants,
-        game_name_kr="썬드림 댓글 다트 로또게임",
-        game_name_en="Sundream Comment Dart Lotto",
-        user=current_user,
-        colors=colors
-    )
-
-# ----- 회전 게임 로직 -----
-games = {}
-
-@socketio.on('start_rotation')
-def handle_start_rotation(data):
-    """
-    data = { time: "HH:MM:SS" } (UTC 기준)
-    """
-    user_id = current_user.id if current_user.is_authenticated else 'anonymous'
-    if user_id not in games:
-        games[user_id] = {
-            'running': False,
-            'target_time': None,
-            'current_angle': 0.0,
-            'final_winner': None
-        }
-    game = games[user_id]
-
-    t_str = data['time']
-    now = datetime.datetime.utcnow()  # 서버 현재 시각 (UTC)
-    target_today_str = now.strftime('%Y-%m-%d') + ' ' + t_str
-    try:
-        game['target_time'] = datetime.datetime.strptime(target_today_str, '%Y-%m-%d %H:%M:%S')
-    except ValueError:
-        socketio.emit('error', {'message': '시간 형식이 잘못되었습니다. HH:MM:SS (UTC) 형식으로 입력.'},
-                      broadcast=True, namespace='/')
-        return
-
-    print("DEBUG: now =", now, "target_time =", game['target_time'])
-
-    if game['target_time'] <= now:
-        socketio.emit('error', {'message': '미래 시각을 입력해주세요.'},
-                      broadcast=True, namespace='/')
-        return
-
-    # 회전 시작
-    game['running'] = True
-    game['final_winner'] = None
-    game['current_angle'] = 0.0
-
-    socketio.emit('play_beep', broadcast=True, namespace='/')
-    socketio.start_background_task(rotate, user_id)
-
-def rotate(user_id):
-    if user_id not in games:
-        return
-
-    game = games[user_id]
-    while game['running']:
-        now = datetime.datetime.utcnow()
-        time_left = (game['target_time'] - now).total_seconds()
-
-        if time_left <= 0:
-            # 회전 종료
-            game['running'] = False
-            game['current_angle'] %= 360
-            winner = calculate_winner(game['current_angle'])
-            game['final_winner'] = winner
-            socketio.emit('update_winner', {'winner': winner},
-                          broadcast=True, namespace='/')
-            socketio.emit('play_fanfare', broadcast=True, namespace='/')
-            break
-
-        # time_left에 따라 회전 속도 조절 (1 ~ 6 범위)
-        speed = max(1, min(6, time_left * 2))
-
-        # 랜덤 각도 누적
-        game['current_angle'] += random.uniform(1, speed)
-        game['current_angle'] %= 360
-
-        # 회전 상황 실시간 업데이트
-        socketio.emit('update_chart',
-                      {'angle': game['current_angle'], 'winner': game['final_winner']},
-                      broadcast=True, namespace='/')
-
-        eventlet.sleep(0.05)
-
-def calculate_winner(final_angle):
-    # 화살표가 3시(0도) 방향에 고정된 상태
-    pointer_angle = final_angle % 360
-    cumulative_angle = 0.0
-    for name, count in zip(names, counts):
-        portion = count / total_count
-        sector_angle = portion * 360.0
-        seg_start = cumulative_angle % 360
-        seg_end = (cumulative_angle + sector_angle) % 360
-        if in_arc_range(pointer_angle, seg_start, seg_end):
-            return name
-        cumulative_angle += sector_angle
-    return names[-1]
-
-def in_arc_range(x, start, end):
-    if start <= end:
-        return start <= x < end
-    else:
-        return x >= start or x < end
-
-if __name__ == '__main__':
-    # debug=True로 하면 코드 수정 시 자동 재시작
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+        participants = [(name, int(count)) for name, count in part
