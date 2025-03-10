@@ -261,19 +261,18 @@ socket.on('start_game', function(data) {
         if (progress < 0.2) {
             // 초반 20% - 가속 단계
             const accelerationProgress = progress / 0.2;
-            const speedFactor = accelerationProgress * accelerationProgress;
-            currentAngle = finalAngle * speedFactor * 0.3; // 최대 30%까지 가속
+            currentAngle = finalAngle * (accelerationProgress * accelerationProgress) * 0.3; // 최대 30%까지 가속
         } else if (progress > 0.7) {
             // 후반 30% - 감속 단계
             const decelerationProgress = (progress - 0.7) / 0.3;
-            const remaining = 1 - decelerationProgress * decelerationProgress;
-            currentAngle = finalAngle * (0.9 + remaining * 0.1); // 90%에서 100%로 감속
+            const slowdownFactor = 1 - (decelerationProgress * decelerationProgress);
+            currentAngle = finalAngle * (0.9 + slowdownFactor * 0.1); // 90%에서 100%로 감속
         } else {
             // 중간 50% - 일정 속도
             currentAngle = finalAngle * (0.3 + (progress - 0.2) / 0.5 * 0.6); // 30%에서 90%로 진행
         }
         
-        // 회전 적용
+        // 회전 적용 (항상 음수 각도로 적용하여 시계 방향 회전 유지)
         document.getElementById('rotating-container').style.transform = 
             `rotate(${-currentAngle}deg)`;
         
