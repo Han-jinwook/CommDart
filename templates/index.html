@@ -229,13 +229,66 @@ options: {
     }
 
     // 이 부분이 중요합니다 - update_chart 이벤트 핸들러
-socket.on('update_chart', function(data) {
-    document.getElementById('rotating-container').style.transform = 
-        `rotate(${-data.angle}deg)`;
+// 기존 update_chart 핸들러 대신 새로운 start_game 핸들러 사용
+socket.on('start_game', function(data) {
+    console.log('게임 시작:', data);
+    document.getElementById('start-button').disabled = true;
     
-    if (data.winner) {
-        document.getElementById('winner').innerText = '당첨자: ' + data.winner;
+    // 서버에서 받은 게임 정보
+    const duration = data.duration; // 초 단위 지속 시간
+    const finalAngle = data.finalAngle; // 최종 회전 각도
+    const winner = data.winner; // 미리 결정된 당첨자
+    
+    // 애니메이션을 위한 변수
+    let startTime = Date.now();
+    const totalTime = duration * 1000; // 밀리초로 변환
+    
+    function animate() {
+        const now = Date.now();
+        const elapsed = now - startTime;
+        
+        if (elapsed >= totalTime) {
+            // 애니메이션 완료, 최종 위치로 설정
+            document.getElementById('rotating-container').style.transform = 
+                `rotate(${-finalAngle}deg)`;
+            return;
+        }
+        
+        // 애니메이션 진행 계산 (초반 가속, 후반 감속)
+        const progress = elapsed / totalTime;
+        let currentAngle;
+        
+        if (progress < 0.2) {
+            // 초반 20% - 가속 단계
+            const accelerationProgress = progress / 0.2;
+            const speedFactor = accelerationProgress * accelerationProgress;
+            currentAngle = finalAngle * speedFactor * 0.3; // 최대 30%까지 가속
+        } else if (progress > 0.7) {
+            // 후반 30% - 감속 단계
+            const decelerationProgress = (progress - 0.7) / 0.3;
+            const remaining = 1 - decelerationProgress * decelerationProgress;
+            currentAngle = finalAngle * (0.9 + remaining * 0.1); // 90%에서 100%로 감속
+        } else {
+            // 중간 50% - 일정 속도
+            currentAngle = finalAngle * (0.3 + (progress - 0.2) / 0.5 * 0.6); // 30%에서 90%로 진행
+        }
+        
+        // 회전 적용
+        document.getElementById('rotating-container').style.transform = 
+            `rotate(${-currentAngle}deg)`;
+        
+        // 다음 프레임 요청
+        requestAnimationFrame(animate);
     }
+    
+    // 애니메이션 시작
+    animate();
+});
+
+// 당첨자 업데이트 이벤트 핸들러는 그대로 유지
+socket.on('update_winner', function(data) {
+    document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
+    document.getElementById('start-button').disabled = false;
 });
 
     socket.on('update_winner', function(data) {
