@@ -171,12 +171,37 @@ def handle_start_rotation(data):
         socketio.emit('error', {'message': '미래 시각을 입력해주세요.'}, namespace='/')
         return
 
+    # 지속 시간 계산
+    duration = (game['target_time'] - now).total_seconds()
+    
+    # 최종 회전 각도 미리 결정 (720~1440도 사이 랜덤)
+    final_angle = random.uniform(720, 1440)
+    game['current_angle'] = final_angle % 360
+    
+    # 당첨자 미리 계산
+    winner = calculate_winner(game['current_angle'])
+    game['final_winner'] = winner
+    
+    # 게임 상태 업데이트
     game['running'] = True
-    game['final_winner'] = None
-    game['current_angle'] = 0.0
-
+    
+    # 클라이언트에게 모든 정보를 한 번에 전송
+    socketio.emit('start_game', {
+        'duration': duration,
+        'finalAngle': final_angle,
+        'endTime': game['target_time'].isoformat(),
+        'winner': winner
+    }, namespace='/')
+    
+    # 비프음 재생
     socketio.emit('play_beep', namespace='/')
-    socketio.start_background_task(rotate, user_id)
+    
+    # 종료 시간에 팡파레 및 당첨자 알림을 위한 타이머 설정
+    delay = duration
+    socketio.sleep(delay)
+    socketio.emit('update_winner', {'winner': winner}, namespace='/')
+    socketio.emit('play_fanfare', namespace='/')
+    game['running'] = False
 
 def rotate(user_id):
     if user_id not in games:
