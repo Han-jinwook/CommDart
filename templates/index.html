@@ -268,64 +268,72 @@
         }
 
         // 클라이언트 측 애니메이션 - 새로운 이벤트 핸들러
-        socket.on('start_game', function(data) {
-            logDebug('게임 시작: ' + JSON.stringify(data));
-            document.getElementById('start-button').disabled = true;
-            
-            // 서버에서 받은 게임 정보
-            const duration = data.duration; // 초 단위 지속 시간
-            const finalAngle = data.finalAngle; // 최종 회전 각도
-            const winner = data.winner; // 미리 결정된 당첨자
-            
-            // 애니메이션을 위한 변수
-            let startTime = Date.now();
-            const totalTime = duration * 1000; // 밀리초로 변환
-            
-            function animate() {
-                const now = Date.now();
-                const elapsed = now - startTime;
-                
-                if (elapsed >= totalTime) {
-                    // 애니메이션 완료, 최종 위치로 설정
-                    document.getElementById('rotating-container').style.transform = 
-                        `rotate(${-finalAngle}deg)`;
-                    return;
-                }
-                
-                // 애니메이션 진행 계산 (초반 가속, 중간 일정 속도, 후반 감속)
-                const progress = elapsed / totalTime;
-                let currentAngle;
-                
-                if (progress < 0.2) {
-                    // 초반 20% - 가속 단계
-                    const accelerationProgress = progress / 0.2;
-                    currentAngle = finalAngle * (accelerationProgress * accelerationProgress) * 0.3; // 최대 30%까지 가속
-                } else if (progress > 0.7) {
-                    // 후반 30% - 감속 단계
-                    const decelerationProgress = (progress - 0.7) / 0.3;
-                    const slowdownFactor = 1 - (decelerationProgress * decelerationProgress);
-                    currentAngle = finalAngle * (0.9 + slowdownFactor * 0.1); // 90%에서 100%로 감속
-                } else {
-                    // 중간 50% - 일정 속도
-                    currentAngle = finalAngle * (0.3 + (progress - 0.2) / 0.5 * 0.6); // 30%에서 90%로 진행
-                }
-                
-                // 회전 적용 (항상 음수 각도로 적용하여 시계 방향 회전 유지)
-                document.getElementById('rotating-container').style.transform = 
-                    `rotate(${-currentAngle}deg)`;
-                
-                // 디버그 로그
-                if (elapsed % 1000 < 50) {  // 약 1초마다 로그
-                    logDebug(`${Math.floor(elapsed/1000)}초: 각도 ${currentAngle.toFixed(1)}°`);
-                }
-                
-                // 다음 프레임 요청
-                requestAnimationFrame(animate);
-            }
-            
-            // 애니메이션 시작
-            animate();
-        });
+       socket.on('start_game', function(data) {
+    logDebug('게임 시작: ' + JSON.stringify(data));
+    document.getElementById('start-button').disabled = true;
+    
+    // 서버에서 받은 게임 정보
+    const duration = data.duration; // 초 단위 지속 시간
+    const finalAngle = data.finalAngle; // 최종 회전 각도
+    const winner = data.winner; // 미리 결정된 당첨자
+    
+    // 애니메이션을 위한 변수
+    let startTime = Date.now();
+    const totalTime = duration * 1000; // 밀리초로 변환
+    let lastAngle = 0; // 이전 각도 기록용 변수
+    
+    function animate() {
+        const now = Date.now();
+        const elapsed = now - startTime;
+        
+        if (elapsed >= totalTime) {
+            // 애니메이션 완료, 최종 위치로 설정
+            document.getElementById('rotating-container').style.transform = 
+                `rotate(${-finalAngle}deg)`;
+            return;
+        }
+        
+        // 애니메이션 진행 계산 - 완전히 단순화된 버전
+        const progress = elapsed / totalTime;
+        
+        // 부드러운 애니메이션 커브 (이징)
+        // easeInOutQuad 공식: t < 0.5 ? 2*t*t : -1+(4-2*t)*t
+        const easedProgress = progress < 0.5 ? 
+                            2 * progress * progress : 
+                            -1 + (4 - 2 * progress) * progress;
+        
+        // 단순 선형 계산 - 항상 증가하는 값 보장
+        const currentAngle = finalAngle * easedProgress;
+        
+        // 방향 전환 검사 - 디버깅용
+        if (currentAngle < lastAngle) {
+            logDebug(`경고: 각도 감소 감지! 이전: ${lastAngle.toFixed(1)}°, 현재: ${currentAngle.toFixed(1)}°`);
+            // 이전 각도를 유지 (실제로는 이 부분이 실행되지 않아야 함)
+            document.getElementById('rotating-container').style.transform = 
+                `rotate(${-lastAngle}deg)`;
+            requestAnimationFrame(animate);
+            return;
+        }
+        
+        // 각도 업데이트
+        lastAngle = currentAngle;
+        
+        // 회전 적용
+        document.getElementById('rotating-container').style.transform = 
+            `rotate(${-currentAngle}deg)`;
+        
+        // 디버그 로그
+        if (elapsed % 1000 < 50) {  // 약 1초마다 로그
+            logDebug(`${Math.floor(elapsed/1000)}초: 각도 ${currentAngle.toFixed(1)}°, 진행률 ${(progress*100).toFixed(1)}%`);
+        }
+        
+        // 다음 프레임 요청
+        requestAnimationFrame(animate);
+    }
+    
+    // 애니메이션 시작
+    animate();
+});
 
         // 기존 이벤트 핸들러들
         socket.on('update_winner', function(data) {
