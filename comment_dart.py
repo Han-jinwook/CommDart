@@ -154,7 +154,7 @@ def cleanup_inactive_games():
     current_time = datetime.datetime.utcnow()
     to_remove = []
     for user_id, game in games.items():
-        # 30분 이상 활동이 없는 게임 종료
+        # 30분 이상, 활동이 없는 게임 종료
         if 'last_activity' in game and (current_time - game['last_activity']).total_seconds() > 1800:
             to_remove.append(user_id)
     
@@ -224,9 +224,9 @@ def handle_start_rotation(data):
     final_angle = random.uniform(720, 1440)
     game['current_angle'] = final_angle % 360
     
-    # 화살표가 가리키는 위치에서 당첨자 계산
-    pointer_angle = (360 - game['current_angle']) % 360
-    winner = calculate_winner_at_angle(pointer_angle)
+    # 화살표는 12시 방향(270도)에 고정
+    # 원판의 회전 각도에 따라 당첨자 계산
+    winner = calculate_winner_at_angle(game['current_angle'])
     game['final_winner'] = winner
     
     # 게임 상태 업데이트
@@ -255,29 +255,26 @@ def handle_start_rotation(data):
 
 def calculate_winner_at_angle(pointer_angle):
     """특정 각도에서의 당첨자를 계산하는 함수"""
+    # 12시 방향은 270도입니다. 
+    # 원판이 회전하는 동안 화살표는 고정된 12시 위치(270도)에 있습니다.
+    
+    # 원판의 회전각도와 화살표의 위치(270도)를 고려하여 계산
+    sector_angle = (270 - pointer_angle) % 360
+    
     cumulative_angle = 0.0
     for name, cnt in zip(names, counts):
         portion = cnt / total_count
-        sector_angle = portion * 360.0
+        sector_size = portion * 360.0
         sector_start = cumulative_angle % 360
-        sector_end = (cumulative_angle + sector_angle) % 360
+        sector_end = (cumulative_angle + sector_size) % 360
         
-        if in_arc_range(pointer_angle, sector_start, sector_end):
-            print(f"WINNER: {name}, at angle {pointer_angle:.1f}°")
+        if in_arc_range(sector_angle, sector_start, sector_end):
+            print(f"WINNER: {name}, at angle {sector_angle:.1f}°")
             return name
         
-        cumulative_angle += sector_angle
+        cumulative_angle += sector_size
     
     return names[-1]
-
-def calculate_winner(final_angle):
-    """
-    회전 최종 각도에서 당첨자를 계산하는 함수
-    화살표는 3시 방향(0도)에 고정, 원판이 시계 방향으로 회전
-    """
-    # 화살표가 가리키는 위치 계산 (반대 방향)
-    pointer_angle = (360 - final_angle) % 360
-    return calculate_winner_at_angle(pointer_angle)
 
 def in_arc_range(x, start, end):
     """주어진 각도 x가 시작-끝 범위 내에 있는지 확인"""
