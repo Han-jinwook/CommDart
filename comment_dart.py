@@ -2,6 +2,7 @@ from flask_cors import CORS
 import os
 import random
 import datetime
+import threading
 
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user
@@ -18,8 +19,8 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 # CORS 설정 추가
 CORS(app)
 
-# SocketIO 객체 수정
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", engineio_logger=True, logger=True)
+# SocketIO 객체 설정
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 # ----- 로그인 매니저 설정 -----
 login_manager = LoginManager()
@@ -81,6 +82,12 @@ def login():
 @app.route('/logout')
 def logout():
     if current_user.is_authenticated:
+        user_id = current_user.id
+        # 해당 사용자의 게임 상태 초기화
+        if user_id in games:
+            games[user_id]['running'] = False
+            games[user_id]['final_winner'] = None
+            games[user_id]['current_angle'] = 0.0
         logout_user()
     return redirect(url_for('index'))
 
@@ -142,19 +149,57 @@ def index():
 # ----- 회전 게임 로직 -----
 games = {}
 
+# 비활성 게임 정리 함수
+def cleanup_inactive_games():
+    current_time = datetime.datetime.utcnow()
+    to_remove = []
+    for user_id, game in games.items():
+        # 30분 이상 활동이 없는 게임 종료
+        if 'last_activity' in game and (current_time - game['last_activity']).total_seconds() > 1800:
+            to_remove.append(user_id)
+    
+    for user_id in to_remove:
+        print(f"Cleaning up inactive game for user: {user_id}")
+        games[user_id]['running'] = False
+    
+    # 15분마다 실행
+    threading.Timer(900, cleanup_inactive_games).start()
+
+@socketio.on('connect')
+def handle_connect():
+    print("Client connected:", request.sid)
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print("Client disconnected:", request.sid)
+
+@socketio.on('reset_game')
+def handle_reset_game():
+    user_id = current_user.id if current_user.is_authenticated else 'anonymous'
+    if user_id in games:
+        games[user_id]['running'] = False
+        games[user_id]['final_winner'] = None
+        games[user_id]['current_angle'] = 0.0
+    print(f"Game reset for user: {user_id}")
+
 @socketio.on('start_rotation')
 def handle_start_rotation(data):
     """
     data = { time: "HH:MM:SS" } (UTC 기준)
     """
+    print("Received start_rotation with data:", data)
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
     if user_id not in games:
         games[user_id] = {
             'running': False,
             'target_time': None,
             'current_angle': 0.0,
-            'final_winner': None
+            'final_winner': None,
+            'last_activity': datetime.datetime.utcnow()
         }
+    else:
+        games[user_id]['last_activity'] = datetime.datetime.utcnow()
+    
     game = games[user_id]
 
     now = datetime.datetime.utcnow()
@@ -163,6 +208,7 @@ def handle_start_rotation(data):
     try:
         game['target_time'] = datetime.datetime.strptime(target_today_str, '%Y-%m-%d %H:%M:%S')
     except ValueError:
+        print("DEBUG: Invalid time format:", t_str)
         socketio.emit('error', {'message': '시간 형식이 잘못되었습니다.'}, namespace='/')
         return
 
@@ -178,8 +224,9 @@ def handle_start_rotation(data):
     final_angle = random.uniform(720, 1440)
     game['current_angle'] = final_angle % 360
     
-    # 당첨자 미리 계산
-    winner = calculate_winner(game['current_angle'])
+    # 화살표가 가리키는 위치에서 당첨자 계산
+    pointer_angle = (360 - game['current_angle']) % 360
+    winner = calculate_winner_at_angle(pointer_angle)
     game['final_winner'] = winner
     
     # 게임 상태 업데이트
@@ -197,68 +244,17 @@ def handle_start_rotation(data):
     socketio.emit('play_beep', namespace='/')
     
     # 종료 시간에 팡파레 및 당첨자 알림을 위한 타이머 설정
-    delay = duration
-    socketio.sleep(delay)
-    socketio.emit('update_winner', {'winner': winner}, namespace='/')
-    socketio.emit('play_fanfare', namespace='/')
-    game['running'] = False
+    def schedule_end_notification():
+        socketio.sleep(duration)
+        socketio.emit('update_winner', {'winner': winner}, namespace='/')
+        socketio.emit('play_fanfare', namespace='/')
+        game['running'] = False
+    
+    # 백그라운드 작업으로 타이머 실행
+    socketio.start_background_task(schedule_end_notification)
 
-def rotate(user_id):
-    if user_id not in games:
-        return
-    game = games[user_id]
-    
-    # 회전 시작 시간 저장
-    start_time = datetime.datetime.utcnow()
-    total_duration = (game['target_time'] - start_time).total_seconds()
-    
-    while game['running']:
-        now = datetime.datetime.utcnow()
-        time_left = (game['target_time'] - now).total_seconds()
-        elapsed = total_duration - time_left
-        
-        if time_left <= 0:
-            game['running'] = False
-            game['current_angle'] %= 360
-            # 중요: 각도를 그대로 전달 (변환하지 않음)
-            winner = calculate_winner(game['current_angle'])
-            game['final_winner'] = winner
-            socketio.emit('update_winner', {'winner': winner}, namespace='/')
-            socketio.emit('play_fanfare', namespace='/')
-            break
-        
-        # 속도 조정 로직
-        acceleration_time = min(5.0, total_duration / 3)
-        deceleration_time = min(5.0, total_duration / 3)
-        
-        if elapsed < acceleration_time:
-            # 초반 가속 단계
-            speed_factor = elapsed / acceleration_time
-            max_speed = 30
-            speed = max(3, max_speed * speed_factor)
-        elif time_left < deceleration_time:
-            # 후반 감속 단계
-            speed_factor = time_left / deceleration_time
-            max_speed = 30
-            speed = max(1, max_speed * speed_factor)
-        else:
-            # 중간 최대 속도 단계
-            speed = 30
-        
-        angle_step = random.uniform(speed * 0.5, speed)
-        game['current_angle'] += angle_step
-        game['current_angle'] %= 360
-        
-        socketio.emit('update_chart',
-                     {'angle': game['current_angle'], 'winner': game['final_winner']},
-                     namespace='/')
-        eventlet.sleep(0.05)
-
-def calculate_winner(final_angle):
-    # 화살표가 가리키는 위치 계산 (반대 방향)
-    pointer_angle = (360 - final_angle) % 360
-    
-    # 각 섹터를 순회하며 화살표가 가리키는 섹터 찾기
+def calculate_winner_at_angle(pointer_angle):
+    """특정 각도에서의 당첨자를 계산하는 함수"""
     cumulative_angle = 0.0
     for name, cnt in zip(names, counts):
         portion = cnt / total_count
@@ -267,41 +263,33 @@ def calculate_winner(final_angle):
         sector_end = (cumulative_angle + sector_angle) % 360
         
         if in_arc_range(pointer_angle, sector_start, sector_end):
+            print(f"WINNER: {name}, at angle {pointer_angle:.1f}°")
             return name
         
         cumulative_angle += sector_angle
     
-    return names[-1]
-    
-    # 정렬해서 보기 쉽게 출력
-    print("All sectors:")
-    for name, start, end in sorted(sectors, key=lambda x: x[1]):
-        print(f"{name}: {start:.1f}° - {end:.1f}°")
-    
-    print(f"Pointer angle: {pointer_angle}°, looking for matching sector...")
-    
-    # 당첨자 찾기
-    cumulative_angle = 0.0
-    for name, cnt in zip(names, counts):
-        portion = cnt / total_count
-        sector_angle = portion * 360.0
-        seg_start = cumulative_angle % 360
-        seg_end = (cumulative_angle + sector_angle) % 360
-        
-        if in_arc_range(pointer_angle, seg_start, seg_end):
-            print(f"WINNER: {name}, in range {seg_start:.1f}° - {seg_end:.1f}°")
-            return name
-        
-        cumulative_angle += sector_angle
-    
-    print(f"No winner found, returning last name: {names[-1]}")
     return names[-1]
 
+def calculate_winner(final_angle):
+    """
+    회전 최종 각도에서 당첨자를 계산하는 함수
+    화살표는 3시 방향(0도)에 고정, 원판이 시계 방향으로 회전
+    """
+    # 화살표가 가리키는 위치 계산 (반대 방향)
+    pointer_angle = (360 - final_angle) % 360
+    return calculate_winner_at_angle(pointer_angle)
+
 def in_arc_range(x, start, end):
+    """주어진 각도 x가 시작-끝 범위 내에 있는지 확인"""
     if start <= end:
         return start <= x < end
     else:
         return x >= start or x < end
+
+# 앱 시작 시 타이머 시작
+@app.before_first_request
+def start_cleanup():
+    cleanup_inactive_games()
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
