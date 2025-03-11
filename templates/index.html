@@ -134,12 +134,37 @@
             background-color: #cccccc;
             cursor: not-allowed;
         }
+        #result-container {
+            text-align: center;
+            margin-top: 20px;
+        }
         #winner {
-            font-size: 1.5em;
+            font-size: 1.8em;
             color: #ff4500;
             margin-top: 10px;
             text-align: center;
             font-weight: bold;
+        }
+        #congratulation {
+            font-size: 1.4em;
+            color: #2a9d8f;
+            margin-top: 10px;
+            text-align: center;
+            font-weight: bold;
+            display: none; /* 처음에는 보이지 않음 */
+            animation: fadeIn 1.5s ease-in-out forwards;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.1);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* 깜박이는 효과 */
+        .blink {
+            animation: blink-animation 1s steps(5, start) infinite;
+        }
+        @keyframes blink-animation {
+            to { color: transparent; }
         }
     </style>
     <link rel="icon" href="data:,">
@@ -190,7 +215,10 @@
                     {% endfor %}
                 </div>
             </div>
-            <h2 id="winner"></h2>
+            <div id="result-container">
+                <h2 id="winner"></h2>
+                <div id="congratulation">썬드림 이벤트 당첨을 축하드립니다!! 🎉</div>
+            </div>
         {% else %}
             <p>로그인이 필요합니다. <a href="{{ url_for('login') }}">로그인</a></p>
         {% endif %}
@@ -254,6 +282,10 @@
             const duration = data.duration;
             const finalAngle = data.finalAngle;
             const winner = data.winner;
+            
+            // 축하 메시지 숨기기
+            document.getElementById('congratulation').style.display = 'none';
+            document.getElementById('winner').innerText = '';
             
             // 카운트다운 시작
             startCountdown(duration);
@@ -351,6 +383,17 @@
         socket.on('update_winner', function(data) {
             document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
             document.getElementById('start-button').disabled = false;
+            
+            // 축하 메시지 표시
+            const congratulation = document.getElementById('congratulation');
+            congratulation.style.display = 'block';
+            congratulation.classList.add('blink');
+            
+            // 깜박임 효과 3초 후 제거
+            setTimeout(() => {
+                congratulation.classList.remove('blink');
+            }, 3000);
+            
             // 카운트다운 정리
             if (countdownInterval) {
                 clearInterval(countdownInterval);
