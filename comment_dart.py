@@ -1,27 +1,21 @@
-from flask_cors import CORS
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user
+from flask_socketio import SocketIO
+from wtforms import Form, StringField, PasswordField, SubmitField
+from wtforms.validators import DataRequired
 import os
 import random
 import datetime
-
-from flask import Flask, render_template, request, redirect, url_for, flash
-from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user
-from wtforms import Form, StringField, PasswordField, SubmitField
-from wtforms.validators import DataRequired
-
-from flask_socketio import SocketIO
 import eventlet
+
 eventlet.monkey_patch()
 
+# Flask 앱 초기화
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
-
-# CORS 설정 추가
-CORS(app)
-
-# SocketIO 객체 수정
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
-# ----- 로그인 매니저 설정 -----
+# 로그인 매니저 설정
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -44,7 +38,7 @@ def load_user(user_id):
         print("[ERROR] load_user:", e)
     return None
 
-# ----- 로그인 폼 (WTForms만 사용) -----
+# 로그인 폼
 class LoginForm(Form):
     username = StringField('ID', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
@@ -84,7 +78,7 @@ def logout():
         logout_user()
     return redirect(url_for('index'))
 
-# ----- 참가자 로딩 함수 (수정된 부분) -----
+# 참가자 로딩 함수
 def load_participants(filename="participants.txt"):
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     participants_file = os.path.join(BASE_DIR, filename)
@@ -106,7 +100,6 @@ def load_participants(filename="participants.txt"):
                 count = 1.0
             participants_dict[name] = participants_dict.get(name, 0) + count
 
-        # participants 리스트를 생성하고, 별명 100개 이상이면 숫자로 대체
         participants = [(name, int(count)) for name, count in participants_dict.items()]
         if len(participants) > 100:
             participants = [(f"{i+1}", count) for i, (name, count) in enumerate(participants)]
@@ -121,13 +114,13 @@ if not participants:
     print("[ERROR] Failed to load participants. Exiting...")
     exit()
 
-# ----- colors 리스트 생성 -----
+# 색상 생성
 colors = []
 for i in range(len(participants)):
     h = i * 360 / len(participants)
     colors.append(f"hsl({h}, 70%, 50%)")
 
-# ----- 전체 참가자 이름, 댓글 수, 총합 등 (필요 시) -----
+# 전체 참가자 정보
 names = [p[0] for p in participants]
 counts = [p[1] for p in participants]
 total_count = sum(counts)
@@ -139,30 +132,46 @@ def index():
                            colors=colors,
                            user=current_user)
 
-# ----- 회전 게임 로직 -----
+# 게임 상태 저장
 games = {}
 
 @socketio.on('connect')
 def handle_connect():
-    print("Client connected:", request.sid)
+    print(f"Client connected: {request.sid}")
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    print("Client disconnected:", request.sid)
+    print(f"Client disconnected: {request.sid}")
 
 @socketio.on('reset_game')
 def handle_reset_game():
-    print("Game reset request received")
+    user_id = current_user.id if current_user.is_authenticated else 'anonymous'
+    if user_id in games:
+        games[user_id] = {
+            'running': False,
+            'target_time': None,
+            'current_angle': 0.0,
+            'final_winner': None
+        }
+    print(f"Game reset for user: {user_id}")
     socketio.emit('game_reset_complete', namespace='/')
 
 @socketio.on('start_rotation')
 def handle_start_rotation(data):
-    """
-    data = { time: "HH:MM:SS" } (UTC 기준)
-    """
-    print("Received start_rotation with data:", data)
+    print(f"Start rotation request received: {data}")
+    user_id = current_user.id if current_user.is_authenticated else 'anonymous'
     
-    # Parse time and validate
+    # 기존 게임 상태 초기화
+    games[user_id] = {
+        'running': False,
+        'target_time': None,
+        'current_angle': 0.0,
+        'final_winner': None
+    }
+    
+    game = games[user_id]
+    
+    # 시간 파싱 및 검증
     now = datetime.datetime.utcnow()
     t_str = data['time']
     target_today_str = now.strftime('%Y-%m-%d') + ' ' + t_str
@@ -170,45 +179,52 @@ def handle_start_rotation(data):
     try:
         target_time = datetime.datetime.strptime(target_today_str, '%Y-%m-%d %H:%M:%S')
     except ValueError:
-        print("Invalid time format:", t_str)
+        print(f"Invalid time format: {t_str}")
         socketio.emit('error', {'message': '시간 형식이 잘못되었습니다.'}, namespace='/')
         return
     
-    print("Target time:", target_time)
+    game['target_time'] = target_time
+    
     if target_time <= now:
         socketio.emit('error', {'message': '미래 시각을 입력해주세요.'}, namespace='/')
         return
     
-    # Calculate duration and angles
+    # 게임 시작 준비
     duration = (target_time - now).total_seconds()
-    final_angle = random.uniform(720, 1440)  # 2-4 full rotations
+    final_angle = random.uniform(720, 1440)  # 2-4 회전
     
-    # Choose a random winner based on weights
+    # 무작위 당첨자 선택 (가중치 기반)
     weighted_names = []
     for name, count in zip(names, counts):
         weighted_names.extend([name] * count)
     
     winner = random.choice(weighted_names)
-    print(f"Selected winner: {winner}, final angle: {final_angle}")
     
-    # Send start_game event with all data
+    # 게임 상태 업데이트
+    game['running'] = True
+    game['current_angle'] = final_angle % 360
+    game['final_winner'] = winner
+    
+    print(f"Game started. Duration: {duration}s, Winner: {winner}, Final angle: {final_angle}")
+    
+    # 클라이언트에 게임 정보 전송
     socketio.emit('start_game', {
         'duration': duration,
         'finalAngle': final_angle,
         'winner': winner
     }, namespace='/')
     
-    # Play sound
+    # 비프음 재생
     socketio.emit('play_beep', namespace='/')
     
-    # Schedule end notification
-    def notify_end():
+    # 종료 시 알림을 위한 타이머 설정
+    def schedule_end_notification():
         socketio.sleep(duration)
-        print(f"Game ended, winner: {winner}")
         socketio.emit('update_winner', {'winner': winner}, namespace='/')
         socketio.emit('play_fanfare', namespace='/')
+        game['running'] = False
     
-    socketio.start_background_task(notify_end)
+    socketio.start_background_task(schedule_end_notification)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
