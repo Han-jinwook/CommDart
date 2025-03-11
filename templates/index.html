@@ -292,112 +292,119 @@
         }
 
         // 사용자 정의 애니메이션 속도 함수
-        function customEasing(t, duration) {
-            // 총 시간을 단계별로 나눔 (초 단위)
-            const slowStartTime = 0; // 시작 - 천천히 시작
-            const accelerateTime = duration * 0.1; // 10% 지점부터 가속
-            const fastTime = duration * 0.3; // 30% 지점에 빠른 속도 도달
-            const decelerateTime = duration * 0.7; // 70% 지점부터 감속
-            const slowEndTime = duration * 0.9; // 90% 지점부터 매우 느리게
-            
-            // 현재 시간(t)이 어느 단계에 있는지 계산
-            const currentTime = t * duration;
-            
-            // 각 단계별 속도 계수
-            let speedFactor;
-            
-            if (currentTime < accelerateTime) {
-                // 시작 단계: 천천히 시작하고 점진적으로 가속
-                const progress = (currentTime - slowStartTime) / (accelerateTime - slowStartTime);
-                speedFactor = 0.3 + (progress * 0.7); // 0.3배속에서 시작하여 1배속으로 증가
-            } else if (currentTime < fastTime) {
-                // 가속 단계: 1배속에서 3배속으로 증가
-                const progress = (currentTime - accelerateTime) / (fastTime - accelerateTime);
-                speedFactor = 1 + (progress * 2); // 1배속에서 3배속으로 증가
-            } else if (currentTime < decelerateTime) {
-                // 고속 단계: 3배속 유지
-                speedFactor = 3;
-            } else if (currentTime < slowEndTime) {
-                // 감속 단계: 3배속에서 1배속으로 감소
-                const progress = (currentTime - decelerateTime) / (slowEndTime - decelerateTime);
-                speedFactor = 3 - (progress * 2); // 3배속에서 1배속으로 감소
-            } else {
-                // 종료 단계: 1배속에서 0.3배속으로 감소
-                const progress = (currentTime - slowEndTime) / (duration - slowEndTime);
-                speedFactor = 1 - (progress * 0.7); // 1배속에서 0.3배속으로 감소
-            }
-            
-            // 최대한 부드러운 애니메이션을 위해 이징 함수를 적용
-            // 실제 진행도에 속도 계수를 적용
-            return t * speedFactor;
-        }
+function customEasing(progress, duration) {
+    // 총 지속 시간을 기준으로 각 단계의 비율 설정
+    const phases = {
+        start: { end: 0.1, from: 0.3, to: 1.0 },    // 0~10%: 0.3배속 → 1.0배속
+        accelerate: { end: 0.3, from: 1.0, to: 3.0 }, // 10~30%: 1.0배속 → 3.0배속
+        fast: { end: 0.7 },                          // 30~70%: 3.0배속 유지
+        decelerate: { end: 0.9, from: 3.0, to: 1.0 }, // 70~90%: 3.0배속 → 1.0배속
+        end: { end: 1.0, from: 1.0, to: 0.3 }        // 90~100%: 1.0배속 → 0.3배속
+    };
+    
+    let speedFactor;
+    
+    // 현재 진행 상태가 어느 단계에 속하는지 확인
+    if (progress < phases.start.end) {
+        // 시작 단계: 천천히 시작
+        const phaseProgress = progress / phases.start.end;
+        speedFactor = phases.start.from + (phaseProgress * (phases.start.to - phases.start.from));
+    } 
+    else if (progress < phases.accelerate.end) {
+        // 가속 단계
+        const phaseProgress = (progress - phases.start.end) / (phases.accelerate.end - phases.start.end);
+        speedFactor = phases.accelerate.from + (phaseProgress * (phases.accelerate.to - phases.accelerate.from));
+    } 
+    else if (progress < phases.fast.end) {
+        // 고속 단계: 3배속 유지
+        speedFactor = phases.accelerate.to; // 3.0
+    } 
+    else if (progress < phases.decelerate.end) {
+        // 감속 단계
+        const phaseProgress = (progress - phases.fast.end) / (phases.decelerate.end - phases.fast.end);
+        speedFactor = phases.decelerate.from - (phaseProgress * (phases.decelerate.from - phases.decelerate.to));
+    } 
+    else {
+        // 종료 단계: 천천히 끝남
+        const phaseProgress = (progress - phases.decelerate.end) / (phases.end.end - phases.decelerate.end);
+        speedFactor = phases.end.from - (phaseProgress * (phases.end.from - phases.end.to));
+    }
+    
+    // 진행률에 속도 계수를 적용하되, 진행 속도가 연속적이게 함
+    // sqrt(progress)는 더 부드러운 시작을 만들어주고, 속도 계수로 전체 속도를 조절함
+    return Math.sqrt(progress) * speedFactor;
+}
 
-        socket.on('start_game', function(data) {
-            console.log('게임 시작:', data);
-            document.getElementById('start-button').disabled = true;
+ socket.on('start_game', function(data) {
+    console.log('게임 시작:', data);
+    document.getElementById('start-button').disabled = true;
+    
+    // 서버에서 받은 게임 정보
+    const duration = data.duration;
+    const finalAngle = data.finalAngle;
+    const winner = data.winner;
+    
+    // 축하 메시지 숨기기
+    document.getElementById('congratulation').style.display = 'none';
+    document.getElementById('winner').innerText = '';
+    
+    // 카운트다운 시작
+    startCountdown(duration);
+    
+    // 애니메이션을 위한 변수
+    let startTime = null;
+    const totalTime = duration * 1000;
+    let lastAngle = 0; // 이전 각도 기록
+    let animationFrameId = null; // requestAnimationFrame ID 저장용
+    
+    // 애니메이션 함수
+    function animate(timestamp) {
+        // 첫 프레임에서 시작 시간을 설정
+        if (!startTime) startTime = timestamp;
+        
+        const elapsed = timestamp - startTime;
+        
+        // 애니메이션 완료 조건
+        if (elapsed >= totalTime) {
+            // 마지막 프레임에서 정확히 finalAngle으로 설정
+            document.getElementById('rotating-container').style.transform = 
+                `rotate(${finalAngle}deg)`;
             
-            // 서버에서 받은 게임 정보
-            const duration = data.duration;
-            const finalAngle = data.finalAngle;
-            const winner = data.winner;
+            // 애니메이션 완료 후 0.5초 후에 당첨자 계산 결과 반영
+            setTimeout(() => {
+                // 서버에서 이미 계산된 당첨자 정보를 사용
+                socket.emit('confirm_winner');
+            }, 500);
             
-            // 축하 메시지 숨기기
-            document.getElementById('congratulation').style.display = 'none';
-            document.getElementById('winner').innerText = '';
-            
-            // 카운트다운 시작
-            startCountdown(duration);
-            
-            // 애니메이션을 위한 변수
-            let startTime = Date.now();
-            const totalTime = duration * 1000;
-            let lastAngle = 0; // 이전 각도 기록
-            
-            function animate() {
-                const now = Date.now();
-                const elapsed = now - startTime;
-                
-                if (elapsed >= totalTime) {
-                    // 애니메이션 완료, 최종 위치로 설정
-                    document.getElementById('rotating-container').style.transform = 
-                        `rotate(${finalAngle}deg)`;
-                    
-                    // 애니메이션 완료 후 0.5초 후에 당첨자 계산 결과 반영
-                    // 이렇게 하면 화면에 보이는 최종 위치와 당첨자 발표 사이에 미세한 시간차를 줄 수 있음
-                    setTimeout(() => {
-                        // 서버에서 이미 계산된 당첨자 정보를 사용
-                        socket.emit('confirm_winner');
-                    }, 500);
-                    
-                    return;
-                }
-                
-                // 진행 비율 계산
-                const progress = elapsed / totalTime;
-                
-                // 사용자 정의 이징 함수 적용
-                const easedProgress = customEasing(progress, duration);
-                
-                // 현재 회전 각도 계산
-                let currentAngle = finalAngle * easedProgress;
-                
-                // 방향 전환 방지 - 항상 이전 각도보다 크거나 같게 유지
-                if (currentAngle < lastAngle) {
-                    currentAngle = lastAngle;
-                }
-                lastAngle = currentAngle;
-                
-                // 회전 적용
-                document.getElementById('rotating-container').style.transform = 
-                    `rotate(${currentAngle}deg)`;
-                
-                // 다음 프레임 요청
-                requestAnimationFrame(animate);
-            }
-            
-            // 애니메이션 시작
-            animate();
-        });
+            return;
+        }
+        
+        // 진행 비율 계산 (0~1 사이 값)
+        const progress = elapsed / totalTime;
+        
+        // 사용자 정의 이징 함수 적용
+        const easedProgress = customEasing(progress, duration);
+        
+        // 현재 회전 각도 계산
+        let currentAngle = finalAngle * easedProgress;
+        
+        // 방향 전환 방지 - 항상 이전 각도보다 크거나 같게 유지
+        if (currentAngle < lastAngle) {
+            currentAngle = lastAngle;
+        }
+        lastAngle = currentAngle;
+        
+        // 회전 적용
+        document.getElementById('rotating-container').style.transform = 
+            `rotate(${currentAngle}deg)`;
+        
+        // 다음 프레임 요청
+        animationFrameId = requestAnimationFrame(animate);
+    }
+    
+    // 애니메이션 시작
+    animationFrameId = requestAnimationFrame(animate);
+});
 
         // 카운트다운 함수
         function startCountdown(durationInSeconds) {
