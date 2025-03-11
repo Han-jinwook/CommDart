@@ -316,28 +316,33 @@ socket.on('start_game', function(data) {
     // 카운트다운 시작
     startCountdown(duration);
     
-    // 애니메이션 정보를 전역 변수에 저장 (디버깅용)
+    // 애니메이션 시작 시간과 정보 저장
+    const startTime = Date.now();
+    const totalDuration = duration * 1000;
+    const endTime = startTime + totalDuration;
+    
+    // 애니메이션 정보 저장 (디버깅용)
     window.animationInfo = {
         duration,
         finalAngle,
         winner,
-        startTime: Date.now(),
-        endTime: Date.now() + (duration * 1000)
+        startTime,
+        endTime
     };
     
-    // 현재 각도를 저장할 변수
-    let currentRotation = 0;
+    // 마지막 회전 속도를 위한 변수
+    const slowdownTime = 5000; // 5초 전부터 감속
     let animationFrameId = null;
     
     // 애니메이션 함수
     function animate() {
         const now = Date.now();
-        const elapsed = now - window.animationInfo.startTime;
-        const totalDuration = duration * 1000;
+        const elapsed = now - startTime;
+        const remaining = totalDuration - elapsed;
         
         // 애니메이션이 완료되었는지 확인
         if (elapsed >= totalDuration) {
-            // 애니메이션 완료, 최종 위치로 설정
+            // 최종 위치로 설정
             document.getElementById('rotating-container').style.transform = 
                 `rotate(${finalAngle}deg)`;
             
@@ -352,24 +357,36 @@ socket.on('start_game', function(data) {
             return;
         }
         
-        // 진행률 계산 (0~1)
-        const progress = elapsed / totalDuration;
+        // 전체 진행률 (0-1 사이 값)
+        const normalProgress = elapsed / totalDuration;
         
-        // 단순한 속도 조절 - 마지막 5초만 감속
-        let speedFactor = 1.0;
-        const remainingTime = totalDuration - elapsed;
+        // 회전 각도 계산 - 정상 속도
+        let currentAngle = finalAngle * normalProgress;
         
-        if (remainingTime < 5000) {  // 마지막 5초
-            // 5초부터 0초까지 선형적으로 1.0에서 0.3까지 감소
-            speedFactor = 0.3 + (remainingTime / 5000) * 0.7;
+        // 마지막 5초에는 점점 느려지게 함
+        if (remaining < slowdownTime) {
+            // 감속 구간의 진행률 (1.0에서 0.0으로)
+            const slowdownProgress = remaining / slowdownTime;
+            
+            // 예상 정상 속도의 각도
+            const expectedNormalAngle = finalAngle * normalProgress;
+            
+            // 5초 전 시점의 각도 계산
+            const angleAt5SecondsBefore = finalAngle * ((totalDuration - slowdownTime) / totalDuration);
+            
+            // 남은 회전해야 할 각도
+            const remainingAngle = finalAngle - angleAt5SecondsBefore;
+            
+            // 감속 구간의 각도 계산 (2차 곡선으로 감속 - 더 자연스러운 느낌)
+            const slowdownAngle = angleAt5SecondsBefore + remainingAngle * (1 - (slowdownProgress * slowdownProgress));
+            
+            // 최종 각도 설정
+            currentAngle = slowdownAngle;
         }
-        
-        // 현재 회전 각도 계산 (최종 각도에 진행률과 속도 계수를 곱함)
-        currentRotation = finalAngle * progress * speedFactor;
         
         // 회전 적용
         document.getElementById('rotating-container').style.transform = 
-            `rotate(${currentRotation}deg)`;
+            `rotate(${currentAngle}deg)`;
         
         // 다음 프레임 요청
         animationFrameId = requestAnimationFrame(animate);
@@ -380,10 +397,17 @@ socket.on('start_game', function(data) {
     
     // 백업 타이머: 정확히 서버의 지속 시간 후에 애니메이션 종료를 보장
     setTimeout(() => {
+        // 애니메이션 프레임 취소
         cancelAnimationFrame(animationFrameId);
+        
+        // 최종 위치로 설정
         document.getElementById('rotating-container').style.transform = 
             `rotate(${finalAngle}deg)`;
+            
+        // 당첨자 확인 이벤트 발생
         socket.emit('confirm_winner');
+        
+        console.log('백업 타이머로 애니메이션 종료');
     }, totalDuration + 50); // 서버와의 약간의 시간차를 고려
 });
         
