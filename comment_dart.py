@@ -183,24 +183,25 @@ def handle_reset_game():
     print(f"Game reset for user: {user_id}")
 
 @socketio.on('start_rotation')
+@socketio.on('start_rotation')
 def handle_start_rotation(data):
     """
     data = { time: "HH:MM:SS" } (UTC 기준)
     """
     print("Received start_rotation with data:", data)
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
-    if user_id not in games:
-        games[user_id] = {
-            'running': False,
-            'target_time': None,
-            'current_angle': 0.0,
-            'final_winner': None,
-            'last_activity': datetime.datetime.utcnow()
-        }
-    else:
-        games[user_id]['last_activity'] = datetime.datetime.utcnow()
+    
+    # 강제 초기화: 이전 게임 상태와 관계없이 새로 시작
+    games[user_id] = {
+        'running': False,
+        'target_time': None,
+        'current_angle': 0.0,
+        'final_winner': None,
+        'last_activity': datetime.datetime.utcnow()
+    }
     
     game = games[user_id]
+    # ... 나머지 코드는 그대로 ...
 
     now = datetime.datetime.utcnow()
     t_str = data['time']
