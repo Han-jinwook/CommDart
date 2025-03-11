@@ -51,12 +51,12 @@
         #pointer {
             position: absolute;
             left: 50%;
-            top: -20px; /* 원판 위에 위치 */
+            top: -30px;
             width: 0;
             height: 0;
             border-left: 15px solid transparent;
             border-right: 15px solid transparent;
-            border-top: 25px solid red; /* 아래쪽을 가리키는 삼각형 */
+            border-top: 30px solid red;
             transform: translateX(-50%);
             z-index: 10;
         }
@@ -95,6 +95,7 @@
         }
         button {
             padding: 12px 25px;
+            margin: 0 5px;
             background-color: #4CAF50;
             color: white;
             border: none;
@@ -108,6 +109,12 @@
         button:disabled {
             background-color: #cccccc;
             cursor: not-allowed;
+        }
+        #reset-button {
+            background-color: #f44336;
+        }
+        #reset-button:hover {
+            background-color: #d32f2f;
         }
         #current-time {
             font-size: 1.2em;
@@ -146,7 +153,7 @@
         {% if user.is_authenticated %}
             <div id="main-container">
                 <div id="chart-container">
-                    <!-- 화살표는 원판 위에 고정 -->
+                    <!-- 화살표는 12시 방향에 고정 -->
                     <div id="pointer"></div>
                     <div id="rotating-container">
                         <canvas id="dart-chart"></canvas>
@@ -168,6 +175,7 @@
             <div id="time-input-container">
                 <input type="time" id="target-time" value="04:44">
                 <button id="start-button" onclick="startRotation()">시작</button>
+                <button id="reset-button" onclick="resetGame()">초기화</button>
             </div>
             <h2 id="winner"></h2>
             <div id="debug"></div>
@@ -192,7 +200,7 @@
         let currentAudio = null;
         let rotationInProgress = false;
         
-        // 로그 함수
+        // 디버깅 로그 함수
         function logDebug(message) {
             console.log(message);
             const debugEl = document.getElementById('debug');
@@ -216,6 +224,15 @@
             }
         });
 
+        // 초기화 완료 이벤트
+        socket.on('game_reset_complete', function() {
+            logDebug('Game reset confirmed by server');
+            document.getElementById('start-button').disabled = false;
+            document.getElementById('winner').innerText = '';
+            document.getElementById('rotating-container').style.transform = 'rotate(0deg)';
+        });
+
+        // 차트 초기화 함수
         function initChart() {
             Chart.register(ChartDataLabels);
             const ctx = document.getElementById('dart-chart').getContext('2d');
@@ -245,8 +262,10 @@
                     cutout: '60%'
                 }
             });
+            logDebug('차트 초기화 완료');
         }
 
+        // 색상 생성 함수
         function generateColors(count) {
             const colors = [];
             for (let i = 0; i < count; i++) {
@@ -255,92 +274,107 @@
             return colors;
         }
 
-        // 클라이언트 측 애니메이션
-socket.on('start_game', function(data) {
-    logDebug('게임 시작: ' + JSON.stringify(data));
-    document.getElementById('start-button').disabled = true;
-    
-    // 서버에서 받은 게임 정보
-    const duration = data.duration; // 초 단위 지속 시간
-    const finalAngle = data.finalAngle; // 최종 회전 각도
-    const winner = data.winner; // 미리 결정된 당첨자
-    
-    // 애니메이션을 위한 변수
-    let startTime = Date.now();
-    const totalTime = duration * 1000; // 밀리초로 변환
-    
-    function animate() {
-        const now = Date.now();
-        const elapsed = now - startTime;
-        
-        // 애니메이션이 완료되었거나 거의 완료된 경우 (마지막 100ms에는 강제로 최종 위치로)
-        if (elapsed >= totalTime - 100) {
-            document.getElementById('rotating-container').style.transform = 
-                `rotate(${finalAngle}deg)`;
-            return; // 애니메이션 종료
-        }
-        
-        // 매우 단순한 애니메이션 곡선: 시작은 빠르게, 끝은 천천히
-        let progress = elapsed / totalTime;
-        
-        // 3단계 애니메이션 (초반 가속, 중간 일정, 후반 감속)
-        let currentAngle;
-        if (progress < 0.3) {
-            // 초반 30% - 빠르게 가속
-            currentAngle = finalAngle * (progress / 0.3) * 0.4; // 40%까지 빠르게
-        } else if (progress > 0.7) {
-            // 후반 30% - 천천히 감속
-            const endProgress = (progress - 0.7) / 0.3;
-            currentAngle = finalAngle * (0.8 + endProgress * 0.2); // 80%에서 100%로 천천히
-        } else {
-            // 중간 40% - 일정한 빠른 속도
-            currentAngle = finalAngle * (0.4 + (progress - 0.3) / 0.4 * 0.4); // 40%에서 80%까지
-        }
-        
-        // 회전 적용 (양수 각도)
-        document.getElementById('rotating-container').style.transform = 
-            `rotate(${currentAngle}deg)`;
-        
-        // 다음 프레임 요청
-        requestAnimationFrame(animate);
-    }
-    
-    // 애니메이션 시작
-    animate();
-});
+        // 게임 시작 이벤트 핸들러
+        socket.on('start_game', function(data) {
+            logDebug('게임 시작: ' + JSON.stringify(data));
+            document.getElementById('start-button').disabled = true;
+            
+            // 서버에서 받은 게임 정보
+            const duration = data.duration; // 초 단위 지속 시간
+            const finalAngle = data.finalAngle; // 최종 회전 각도
+            const winner = data.winner; // 미리 결정된 당첨자
+            
+            logDebug(`지속 시간: ${duration}초, 최종 각도: ${finalAngle}°, 당첨자: ${winner}`);
+            
+            // 애니메이션을 위한 변수
+            let startTime = Date.now();
+            const totalTime = duration * 1000; // 밀리초로 변환
+            
+            function animate() {
+                const now = Date.now();
+                const elapsed = now - startTime;
+                
+                // 애니메이션이 완료되었거나 거의 완료된 경우
+                if (elapsed >= totalTime - 100) {
+                    document.getElementById('rotating-container').style.transform = 
+                        `rotate(${finalAngle}deg)`;
+                    logDebug('애니메이션 완료');
+                    return;
+                }
+                
+                // 진행률 계산
+                const progress = elapsed / totalTime;
+                
+                // 3단계 애니메이션 (초반 가속, 중간 일정, 후반 감속)
+                let currentAngle;
+                if (progress < 0.3) {
+                    // 초반 30% - 빠르게 가속
+                    const startProgress = progress / 0.3;
+                    currentAngle = finalAngle * (startProgress * startProgress) * 0.4; // 40%까지 빠르게
+                } else if (progress > 0.7) {
+                    // 후반 30% - 천천히 감속
+                    const endProgress = (progress - 0.7) / 0.3;
+                    const slowdown = 1 - (endProgress * endProgress);
+                    currentAngle = finalAngle * (0.8 + slowdown * 0.2); // 80%에서 100%로 천천히
+                } else {
+                    // 중간 40% - 일정한 빠른 속도
+                    currentAngle = finalAngle * (0.4 + (progress - 0.3) / 0.4 * 0.4); // 40%에서 80%까지
+                }
+                
+                // 회전 적용 (양수 각도)
+                document.getElementById('rotating-container').style.transform = 
+                    `rotate(${currentAngle}deg)`;
+                
+                // 디버그 로그 (1초에 한 번만)
+                if (elapsed % 1000 < 50) {
+                    logDebug(`${Math.floor(elapsed/1000)}초: ${Math.round(currentAngle)}° (${Math.round(progress*100)}%)`);
+                }
+                
+                // 다음 프레임 요청
+                requestAnimationFrame(animate);
+            }
+            
+            // 애니메이션 시작
+            animate();
+        });
 
-        // 기존 이벤트 핸들러들
+        // 당첨자 발표 이벤트 핸들러
         socket.on('update_winner', function(data) {
+            logDebug('당첨자 발표: ' + data.winner);
             document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
-            document.getElementById('start-button').disabled = false;
             rotationInProgress = false;
         });
 
+        // 오류 이벤트 핸들러
         socket.on('error', function(data) {
+            logDebug('오류 발생: ' + data.message);
             alert(data.message);
             document.getElementById('start-button').disabled = false;
             rotationInProgress = false;
         });
 
-        // 오디오 중복 재생 방지
+        // 오디오 재생 이벤트 핸들러 (중복 재생 방지)
         socket.on('play_beep', function() {
+            logDebug('비프음 재생');
             if (currentAudio) {
                 currentAudio.pause();
                 currentAudio.currentTime = 0;
             }
             currentAudio = new Audio('/static/beep.wav');
-            currentAudio.play().catch(() => logDebug('Beep audio failed'));
+            currentAudio.play().catch(e => logDebug('오디오 재생 실패: ' + e));
         });
 
         socket.on('play_fanfare', function() {
+            logDebug('팡파레 재생');
             if (currentAudio) {
                 currentAudio.pause();
                 currentAudio.currentTime = 0;
             }
             currentAudio = new Audio('/static/fanfare.wav');
-            currentAudio.play().catch(() => logDebug('Fanfare audio failed'));
+            currentAudio.play().catch(e => logDebug('오디오 재생 실패: ' + e));
         });
 
+        // 게임 시작 함수
         function startRotation() {
             logDebug('시작 버튼 클릭됨');
             
@@ -375,16 +409,29 @@ socket.on('start_game', function(data) {
             socket.emit('start_rotation', { time: formattedTime });
         }
 
+        // 게임 초기화 함수
+        function resetGame() {
+            logDebug('초기화 버튼 클릭됨');
+            socket.emit('reset_game');
+            rotationInProgress = false;
+        }
+
+        // 현재 시간 업데이트 함수
         function updateTime() {
             const now = new Date();
             document.getElementById('current-time').innerText =
                 now.toLocaleTimeString('ko-KR', { hour12: false });
         }
+        
+        // 시간 업데이트 타이머 시작
         setInterval(updateTime, 1000);
 
+        // 페이지 로드 시 초기화
         window.onload = function() {
             initChart();
             updateTime();
+            resetGame();
+            logDebug('페이지 로드 완료');
         };
     </script>
 </body>
