@@ -154,7 +154,7 @@ def cleanup_inactive_games():
     current_time = datetime.datetime.utcnow()
     to_remove = []
     for user_id, game in games.items():
-        # 30분 이상, 활동이 없는 게임 종료
+        # 30분 이상 활동이 없는 게임 종료
         if 'last_activity' in game and (current_time - game['last_activity']).total_seconds() > 1800:
             to_remove.append(user_id)
     
@@ -177,12 +177,17 @@ def handle_disconnect():
 def handle_reset_game():
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
     if user_id in games:
-        games[user_id]['running'] = False
-        games[user_id]['final_winner'] = None
-        games[user_id]['current_angle'] = 0.0
+        games[user_id] = {
+            'running': False,
+            'target_time': None,
+            'current_angle': 0.0,
+            'final_winner': None,
+            'last_activity': datetime.datetime.utcnow()
+        }
     print(f"Game reset for user: {user_id}")
+    # 클라이언트에게 재설정 완료 알림
+    socketio.emit('game_reset_complete', namespace='/')
 
-@socketio.on('start_rotation')
 @socketio.on('start_rotation')
 def handle_start_rotation(data):
     """
@@ -201,7 +206,6 @@ def handle_start_rotation(data):
     }
     
     game = games[user_id]
-    # ... 나머지 코드는 그대로 ...
 
     now = datetime.datetime.utcnow()
     t_str = data['time']
@@ -225,10 +229,11 @@ def handle_start_rotation(data):
     final_angle = random.uniform(720, 1440)
     game['current_angle'] = final_angle % 360
     
-    # 화살표는 12시 방향(270도)에 고정
-    # 원판의 회전 각도에 따라 당첨자 계산
-    winner = calculate_winner_at_angle(game['current_angle'])
+    # 당첨자 계산 (12시 방향 화살표)
+    winner = determine_winner_at_position(final_angle)
     game['final_winner'] = winner
+    
+    print(f"최종 각도: {final_angle}, 당첨자: {winner}")
     
     # 게임 상태 업데이트
     game['running'] = True
@@ -254,51 +259,56 @@ def handle_start_rotation(data):
     # 백그라운드 작업으로 타이머 실행
     socketio.start_background_task(schedule_end_notification)
 
-def calculate_winner_at_angle(pointer_angle):
-    """특정 각도에서의 당첨자를 계산하는 함수"""
-    # 12시 방향은 270도(차트.js 기준)이지만, 회전 방향을 고려하여 조정
-    # 화살표는 고정된 12시 위치(0도)에 있으며, 원판이 회전합니다.
+def determine_winner_at_position(angle):
+    """
+    회전 완료 후 최종 각도에서 당첨자를 결정하는 함수
+    화살표는 12시 방향(0도)에 고정되어 있고, 원판이 시계 방향으로 회전한다고 가정
     
-    # 원판의 회전각도를 고려한 화살표 위치
-    effective_angle = pointer_angle % 360
+    각도가 0도일 때 첫 번째 섹터가 화살표 아래에 오므로, 
+    회전 각도와 각 섹터의 시작/끝 각도를 비교하여 당첨자를 결정
+    """
+    final_position = angle % 360  # 최종 회전 각도 (0-360도)
     
-    # Chart.js는 0도가 12시 방향이 아닌 3시 방향이므로 270도 조정
-    chart_angle = (270 + effective_angle) % 360
+    # Chart.js의 0도는 원판의 오른쪽(3시 방향)이지만, 
+    # 우리는 12시 방향(원판 위쪽)에 화살표가 있어서 조정 필요
+    adjusted_position = (270 - final_position) % 360
     
-    print(f"회전각도: {pointer_angle:.1f}°, 유효각도: {effective_angle:.1f}°, 차트각도: {chart_angle:.1f}°")
+    print(f"회전각: {final_position}°, 조정된 위치: {adjusted_position}°")
     
-    # 각 참가자의 섹터 범위 계산 및 당첨자 찾기
-    cumulative_angle = 0.0
-    for name, cnt in zip(names, counts):
-        portion = cnt / total_count
-        sector_size = portion * 360.0
-        sector_start = cumulative_angle
-        sector_end = cumulative_angle + sector_size
+    # 각 섹터의 범위를 계산하고 화살표 위치와 비교
+    cumulative_angle = 0
+    
+    # 디버깅: 모든 섹터의 범위 출력
+    for i, (name, count) in enumerate(zip(names, counts)):
+        sector_size = (count / total_count) * 360
+        start_angle = cumulative_angle
+        end_angle = cumulative_angle + sector_size
+        print(f"#{i+1} {name}: {start_angle}° ~ {end_angle}° (크기: {sector_size}°)")
+        cumulative_angle += sector_size
+    
+    # 당첨자 결정을 위한 계산
+    cumulative_angle = 0
+    for name, count in zip(names, counts):
+        # 각 섹터의 크기 계산
+        sector_size = (count / total_count) * 360
         
-        print(f"섹터: {name}, 범위: {sector_start:.1f}° - {sector_end:.1f}°")
+        # 섹터의 시작과 끝 각도
+        start_angle = cumulative_angle
+        end_angle = cumulative_angle + sector_size
         
-        # 차트 각도가 이 섹터 내에 있는지 확인
-        if sector_start <= chart_angle < sector_end:
-            print(f"당첨: {name}, 각도: {chart_angle:.1f}°")
+        # 화살표 위치가 이 섹터 내에 있는지 확인
+        if start_angle <= adjusted_position < end_angle:
+            print(f"당첨자 결정: {name} ({start_angle}° ~ {end_angle}°)")
             return name
         
         cumulative_angle += sector_size
     
-    # 마지막 범위 체크 (360도 주변)
-    if chart_angle >= cumulative_angle or chart_angle < 0:
-        print(f"당첨(경계): {names[0]}, 각도: {chart_angle:.1f}°")
+    # 360도 근처의 경계 처리
+    if adjusted_position >= cumulative_angle or adjusted_position < 0:
         return names[0]
     
-    # 기본 값
-    print(f"당첨(기본): {names[-1]}")
+    # 기본값 반환
     return names[-1]
-
-def in_arc_range(x, start, end):
-    """주어진 각도 x가 시작-끝 범위 내에 있는지 확인"""
-    if start <= end:
-        return start <= x < end
-    else:
-        return x >= start or x < end
 
 # 앱 시작 시 타이머 시작
 @app.before_first_request
