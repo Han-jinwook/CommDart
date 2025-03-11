@@ -162,13 +162,20 @@ def handle_start_rotation(data):
     """
     print("Received start_rotation with data:", data)
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
+    
+    # 기존 게임 정보 초기화
     if user_id not in games:
         games[user_id] = {
             'running': False,
             'target_time': None,
             'current_angle': 0.0,
-            'final_winner': None
+            'final_winner': None,
+            'winner_announced': False
         }
+    else:
+        # 기존 게임 객체가 있으면 winner_announced 상태 초기화
+        games[user_id]['winner_announced'] = False
+    
     game = games[user_id]
 
     now = datetime.datetime.utcnow()
@@ -222,10 +229,10 @@ def handle_start_rotation(data):
     # 종료 시간에 팡파레 및 당첨자 알림을 위한 타이머 설정
     def schedule_end_notification():
         socketio.sleep(duration)
-        # 팡파레 소리 재생 (당첨자 표시는 클라이언트 애니메이션 완료 후 confirm_winner에서 처리)
-        socketio.emit('play_fanfare', namespace='/')
+        # 종료 시간에 도달했음을 알리는 로그만 남기고,
+        # 당첨자 발표는 클라이언트의 애니메이션 완료 후 confirm_winner에서만 처리
+        print(f"DEBUG: 서버에서 예정된 종료 시간에 도달. 예상 당첨자: {winner}")
         game['running'] = False
-        print(f"DEBUG: 서버에서 예정된 종료 시간에 도달. 당첨자: {winner}")
     
     # 백그라운드 작업으로 타이머 실행
     socketio.start_background_task(schedule_end_notification)
@@ -241,12 +248,17 @@ def handle_confirm_winner():
         winner = games[user_id]['final_winner']
         print(f"DEBUG: 확정된 당첨자: {winner}")
         
-        # 당첨자 정보 전송
-        socketio.emit('update_winner', {'winner': winner}, namespace='/')
-        
-        # 팡파레 소리는 이미 schedule_end_notification에서 재생했을 수 있지만,
-        # 타이밍 문제로 소리가 재생되지 않았을 경우를 대비해 다시 한번 재생
-        socketio.emit('play_fanfare', namespace='/')
+        # 당첨자 정보 전송 (중복 실행 방지)
+        # 이미 update_winner 이벤트가 발생했는지 확인
+        if games[user_id].get('winner_announced', False):
+            print(f"DEBUG: 당첨자가 이미 발표되었습니다: {winner}")
+        else:
+            # 당첨자 발표 표시
+            games[user_id]['winner_announced'] = True
+            socketio.emit('update_winner', {'winner': winner}, namespace='/')
+            
+            # 팡파레 소리 재생
+            socketio.emit('play_fanfare', namespace='/')
     else:
         # 게임 정보가 없거나 당첨자가 설정되지 않은 경우 오류 메시지 전송
         print("ERROR: 당첨자 정보를 찾을 수 없음")
