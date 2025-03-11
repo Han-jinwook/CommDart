@@ -79,19 +79,43 @@
         #controls {
             text-align: center;
             margin: 10px 0;
+            width: 100%;
         }
-        #time-input-container {
+        #time-controls {
             display: flex;
             align-items: center;
             justify-content: center;
             margin: 10px 0;
+            padding: 10px;
+            background-color: #e9e9e9;
+            border-radius: 5px;
+            flex-wrap: wrap;
+        }
+        .time-control-item {
+            display: flex;
+            align-items: center;
+            margin: 0 15px;
+        }
+        .time-label {
+            font-weight: bold;
+            margin-right: 10px;
+            font-size: 1.1em;
         }
         #target-time {
-            margin: 0 5px;
             padding: 10px;
-            font-size: 16px;
             border: 1px solid #ccc;
             border-radius: 5px;
+            font-size: 18px;
+            width: 120px;
+            text-align: center;
+        }
+        .time-value {
+            font-size: 1.2em;
+            color: #333;
+        }
+        #remaining-time {
+            color: #e63946;
+            font-weight: bold;
         }
         button {
             padding: 12px 25px;
@@ -101,6 +125,7 @@
             cursor: pointer;
             font-size: 16px;
             border-radius: 5px;
+            margin-left: 15px;
         }
         button:hover {
             background-color: #45a049;
@@ -108,11 +133,6 @@
         button:disabled {
             background-color: #cccccc;
             cursor: not-allowed;
-        }
-        #current-time {
-            font-size: 1.2em;
-            color: #333;
-            margin-bottom: 10px;
         }
         #winner {
             font-size: 1.5em;
@@ -132,8 +152,23 @@
         {% endif %}
     </div>
     <div id="controls">
-        <p>현재 시간: <span id="current-time"></span></p>
         {% if user.is_authenticated %}
+            <div id="time-controls">
+                <div class="time-control-item">
+                    <span class="time-label">슈팅시간 설정:</span>
+                    <input type="text" id="target-time" placeholder="HH:MM:SS" value="">
+                    <button id="start-button" onclick="startRotation()">시작</button>
+                </div>
+                <div class="time-control-item">
+                    <span class="time-label">남은시간:</span>
+                    <span id="remaining-time" class="time-value">--:--:--</span>
+                </div>
+                <div class="time-control-item">
+                    <span class="time-label">현재시간:</span>
+                    <span id="current-time" class="time-value"></span>
+                </div>
+            </div>
+            
             <div id="main-container">
                 <div id="chart-container">
                     <!-- 화살표는 12시 방향에 고정 -->
@@ -155,10 +190,6 @@
                     {% endfor %}
                 </div>
             </div>
-            <div id="time-input-container">
-                <input type="text" id="target-time" placeholder="HH:MM:SS" value="">
-                <button id="start-button" onclick="startRotation()">시작</button>
-            </div>
             <h2 id="winner"></h2>
         {% else %}
             <p>로그인이 필요합니다. <a href="{{ url_for('login') }}">로그인</a></p>
@@ -173,6 +204,8 @@
         const socket = io();
         let chart;
         let currentAudio = null;
+        let countdownInterval = null;
+        let targetDateTime = null;
 
         function initChart() {
             Chart.register(ChartDataLabels);
@@ -222,6 +255,9 @@
             const finalAngle = data.finalAngle;
             const winner = data.winner;
             
+            // 카운트다운 시작
+            startCountdown(duration);
+            
             // 애니메이션을 위한 변수
             let startTime = Date.now();
             const totalTime = duration * 1000;
@@ -260,9 +296,66 @@
             animate();
         });
 
+        // 카운트다운 함수
+        function startCountdown(durationInSeconds) {
+            // 이전 카운트다운이 있으면 정리
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            
+            // 목표 시간 설정
+            const now = new Date();
+            targetDateTime = new Date(now.getTime() + durationInSeconds * 1000);
+            
+            // 즉시 한 번 업데이트
+            updateCountdown();
+            
+            // 1초마다 카운트다운 업데이트
+            countdownInterval = setInterval(updateCountdown, 1000);
+        }
+        
+        // 카운트다운 업데이트 함수
+        function updateCountdown() {
+            if (!targetDateTime) {
+                document.getElementById('remaining-time').innerText = '--:--:--';
+                return;
+            }
+            
+            const now = new Date();
+            const diff = targetDateTime - now;
+            
+            if (diff <= 0) {
+                // 카운트다운 종료
+                document.getElementById('remaining-time').innerText = '00:00:00';
+                clearInterval(countdownInterval);
+                return;
+            }
+            
+            // 시, 분, 초 계산
+            let seconds = Math.floor(diff / 1000);
+            let minutes = Math.floor(seconds / 60);
+            let hours = Math.floor(minutes / 60);
+            
+            seconds %= 60;
+            minutes %= 60;
+            
+            // 표시 형식 포맷팅
+            const formattedHours = hours.toString().padStart(2, '0');
+            const formattedMinutes = minutes.toString().padStart(2, '0');
+            const formattedSeconds = seconds.toString().padStart(2, '0');
+            
+            document.getElementById('remaining-time').innerText = 
+                `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+        }
+
         socket.on('update_winner', function(data) {
             document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
             document.getElementById('start-button').disabled = false;
+            // 카운트다운 정리
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                document.getElementById('remaining-time').innerText = '00:00:00';
+            }
         });
 
         socket.on('error', function(data) {
