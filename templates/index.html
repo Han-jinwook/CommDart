@@ -324,9 +324,9 @@
             
             // 회전 속도 계수 (더 천천히 시작하도록 조정)
             const speedCoefficients = {
-                start: 0.15,        // 초기 속도는 매우 느리게 (0.15배속)
-                mid: 1.2,           // 중간 속도는 적당히 빠르게 (1.2배속)
-                end: 0.2,           // 종료 속도는 매우 느리게 (0.2배속)
+                start: 0.3,         // 초기 속도는 매우 느리게 (0.15의 2배)
+                mid: 2.4,           // 중간 속도는 적당히 빠르게 (1.2의 2배)
+                end: 0.4,           // 종료 속도는 매우 느리게 (0.2의 2배)
                 accelerationTime: duration * 0.3,  // 전체 시간의 30%를 가속에 사용
                 constSpeedTime: duration * 0.4,    // 전체 시간의 40%를 일정 속도에 사용
                 decelerationTime: duration * 0.3   // 전체 시간의 30%를 감속에 사용
@@ -334,9 +334,16 @@
             
             // 현재 각도를 저장할 변수
             let currentRotation = 0;
+            // 애니메이션이 완료되었는지 확인하는 플래그
+            let animationCompleted = false;
             
             // 애니메이션 함수
             function rotateWheel() {
+                // 이미 애니메이션이 완료되었으면 추가 작업 없이 종료
+                if (animationCompleted) {
+                    return;
+                }
+                
                 const now = Date.now();
                 const elapsed = now - window.animationInfo.startTime;
                 const totalDuration = duration * 1000;
@@ -352,10 +359,15 @@
                         elapsedTime: (elapsed / 1000).toFixed(2) + '초'
                     });
                     
+                    // 애니메이션 완료 플래그 설정
+                    animationCompleted = true;
+                    
                     // 애니메이션 완료 후 잠시 기다렸다가 당첨자 확인
+                    // 화면 전환 없이 현재 위치의 당첨자를 확인하기 위해 타이밍 조절
                     setTimeout(() => {
+                        // 이미 애니메이션이 완료되었으므로 위치가 고정된 상태에서 당첨자 확인
                         socket.emit('confirm_winner');
-                    }, 1000);
+                    }, 500);
                     
                     return;
                 }
@@ -478,6 +490,14 @@
                     수신된당첨자: data.winner,
                     서버예상당첨자: window.animationInfo.winner
                 });
+                
+                // 당첨자 불일치 확인
+                if (data.winner !== window.animationInfo.winner) {
+                    console.error('당첨자 불일치 발생!', {
+                        서버예상: window.animationInfo.winner,
+                        실제수신: data.winner
+                    });
+                }
             }
             
             // 축하 메시지 표시
