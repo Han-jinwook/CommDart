@@ -192,16 +192,26 @@ def handle_start_rotation(data):
     # 최종 회전 각도 미리 결정 (720~1440도 사이 랜덤)
     final_angle = random.uniform(720, 1440)
     
-    # 화살표는 12시 방향(0도)에 고정됨
     # 전체 회전 각도 저장
     game['current_angle'] = final_angle
     
-    # 화살표가 가리키는 실제 각도 계산 (0도가 12시 방향)
-    # final_angle을 360으로 나눈 나머지를 사용하고, 반대 방향으로 조정
-    pointer_angle = final_angle % 360
+    # 중요: Client의 Chart.js에서 rotation: -Math.PI/2로 설정되어 있음
+    # 즉, -90도 회전된 상태에서 시작함 (12시 방향이 0도가 됨)
+    # Chart.js는 반시계 방향이 양수, 시계 방향이 음수
     
-    # 수정: 당첨자를 계산 함수를 통해 정확히 계산
-    winner = calculate_winner_at_angle(pointer_angle)
+    # 최종 회전 각도를 UI에 표시하기 위해 양수로 설정
+    # 클라이언트에서는 이 각도만큼 시계방향으로 회전함
+    client_final_angle = final_angle
+    
+    # 당첨자 결정을 위한 각도 계산 (실제 화살표가 가리키는 위치)
+    # 화살표는 12시 방향(0도)에 고정되어 있음
+    # 원판이 시계방향으로 회전하면 화살표의 상대 위치는 반시계 방향으로 이동하는 효과
+    relative_angle = 360 - (final_angle % 360)
+    
+    print(f"DEBUG: 최종 회전 각도: {final_angle}°, 상대 각도: {relative_angle}°")
+    
+    # 정확한 당첨자 계산 (화살표가 가리키는 섹터의 참가자)
+    winner = calculate_winner_at_angle(relative_angle)
     game['final_winner'] = winner
     
     # 게임 상태 업데이트
@@ -210,7 +220,7 @@ def handle_start_rotation(data):
     # 클라이언트에게 모든 정보를 한 번에 전송
     socketio.emit('start_game', {
         'duration': duration,
-        'finalAngle': final_angle,
+        'finalAngle': client_final_angle,
         'winner': winner
     }, namespace='/')
     
@@ -220,7 +230,6 @@ def handle_start_rotation(data):
     # 종료 시간에 팡파레 및 당첨자 알림을 위한 타이머 설정
     def schedule_end_notification():
         socketio.sleep(duration)
-        # 여기에서 winner 변수를 사용하여 당첨자 정보 전송
         socketio.emit('update_winner', {'winner': winner}, namespace='/')
         socketio.emit('play_fanfare', namespace='/')
         game['running'] = False
@@ -228,36 +237,42 @@ def handle_start_rotation(data):
     # 백그라운드 작업으로 타이머 실행
     socketio.start_background_task(schedule_end_notification)
 
-def calculate_winner_at_angle(pointer_angle):
-    """특정 각도에서의 당첨자를 계산하는 함수"""
-    print(f"DEBUG: 계산에 사용되는 pointer_angle: {pointer_angle}")
+def calculate_winner_at_angle(angle):
+    """
+    특정 각도에서의 당첨자를 계산하는 함수
+    angle: 0도는 12시 방향, 시계방향으로 증가
+    """
+    print(f"DEBUG: 당첨자 계산에 사용되는 각도: {angle:.2f}°")
+    
     # 각 섹터 배치를 계산하기 위한 설정
     cumulative_angle = 0.0
     
-    # 12시 방향(0도)부터 시계방향으로 각 세그먼트 배치
+    # 각 참가자의 세그먼트 정보를 정확히 계산
     for i, (name, cnt) in enumerate(zip(names, counts)):
         portion = cnt / total_count
         sector_size = portion * 360.0
         sector_start = cumulative_angle
         sector_end = cumulative_angle + sector_size
         
-        # 디버깅을 위한 정보 출력
-        print(f"DEBUG: Sector {i}: {name}, {sector_start}° ~ {sector_end}°, size: {sector_size}°")
+        # 디버깅 정보 출력
+        print(f"DEBUG: Sector {i}: {name}, {sector_start:.2f}° ~ {sector_end:.2f}°, size: {sector_size:.2f}°")
         
-        # 화살표가 가리키는 각도가 현재 세그먼트의 범위 내에 있는지 확인
-        if sector_start <= pointer_angle < sector_end:
-            print(f"DEBUG: 당첨자 결정 - {name} (각도: {pointer_angle})")
+        # 화살표가 현재 세그먼트 내에 있는지 확인
+        if sector_start <= angle < sector_end:
+            print(f"DEBUG: 당첨자 결정 - {name} (각도: {angle:.2f}°)")
             return name
         
         cumulative_angle += sector_size
     
-    # 경계 조건 처리 (360도 근처)
-    if pointer_angle >= cumulative_angle or pointer_angle < 0:
-        print(f"DEBUG: 경계 조건 처리 - 첫 번째 참가자: {names[0]} (각도: {pointer_angle})")
+    # 경계 조건 처리 (360도/0도 근처)
+    if angle >= cumulative_angle or angle < 0:
+        print(f"DEBUG: 경계 조건 처리 - 첫 번째 참가자: {names[0]} (각도: {angle:.2f}°)")
         return names[0]
     
-    print(f"DEBUG: 마지막 참가자 선택: {names[-1]} (각도: {pointer_angle})")
-    return names[-1]
+    # 여기까지 오면 오류 상황
+    print(f"ERROR: 당첨자를 결정할 수 없음 (각도: {angle:.2f}°)")
+    return names[0]  # 기본값으로 첫 번째 참가자 반환
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=True)
