@@ -2,7 +2,6 @@ from flask_cors import CORS
 import os
 import random
 import datetime
-import threading
 
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user
@@ -19,7 +18,7 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 # CORS 설정 추가
 CORS(app)
 
-# SocketIO 객체 설정
+# SocketIO 객체 수정
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 # ----- 로그인 매니저 설정 -----
@@ -82,12 +81,6 @@ def login():
 @app.route('/logout')
 def logout():
     if current_user.is_authenticated:
-        user_id = current_user.id
-        # 해당 사용자의 게임 상태 초기화
-        if user_id in games:
-            games[user_id]['running'] = False
-            games[user_id]['final_winner'] = None
-            games[user_id]['current_angle'] = 0.0
         logout_user()
     return redirect(url_for('index'))
 
@@ -149,22 +142,6 @@ def index():
 # ----- 회전 게임 로직 -----
 games = {}
 
-# 비활성 게임 정리 함수
-def cleanup_inactive_games():
-    current_time = datetime.datetime.utcnow()
-    to_remove = []
-    for user_id, game in games.items():
-        # 30분 이상 활동이 없는 게임 종료
-        if 'last_activity' in game and (current_time - game['last_activity']).total_seconds() > 1800:
-            to_remove.append(user_id)
-    
-    for user_id in to_remove:
-        print(f"Cleaning up inactive game for user: {user_id}")
-        games[user_id]['running'] = False
-    
-    # 15분마다 실행
-    threading.Timer(900, cleanup_inactive_games).start()
-
 @socketio.on('connect')
 def handle_connect():
     print("Client connected:", request.sid)
@@ -175,17 +152,7 @@ def handle_disconnect():
 
 @socketio.on('reset_game')
 def handle_reset_game():
-    user_id = current_user.id if current_user.is_authenticated else 'anonymous'
-    if user_id in games:
-        games[user_id] = {
-            'running': False,
-            'target_time': None,
-            'current_angle': 0.0,
-            'final_winner': None,
-            'last_activity': datetime.datetime.utcnow()
-        }
-    print(f"Game reset for user: {user_id}")
-    # 클라이언트에게 재설정 완료 알림
+    print("Game reset request received")
     socketio.emit('game_reset_complete', namespace='/')
 
 @socketio.on('start_rotation')
@@ -194,126 +161,54 @@ def handle_start_rotation(data):
     data = { time: "HH:MM:SS" } (UTC 기준)
     """
     print("Received start_rotation with data:", data)
-    user_id = current_user.id if current_user.is_authenticated else 'anonymous'
     
-    # 강제 초기화: 이전 게임 상태와 관계없이 새로 시작
-    games[user_id] = {
-        'running': False,
-        'target_time': None,
-        'current_angle': 0.0,
-        'final_winner': None,
-        'last_activity': datetime.datetime.utcnow()
-    }
-    
-    game = games[user_id]
-
+    # Parse time and validate
     now = datetime.datetime.utcnow()
     t_str = data['time']
     target_today_str = now.strftime('%Y-%m-%d') + ' ' + t_str
+    
     try:
-        game['target_time'] = datetime.datetime.strptime(target_today_str, '%Y-%m-%d %H:%M:%S')
+        target_time = datetime.datetime.strptime(target_today_str, '%Y-%m-%d %H:%M:%S')
     except ValueError:
-        print("DEBUG: Invalid time format:", t_str)
+        print("Invalid time format:", t_str)
         socketio.emit('error', {'message': '시간 형식이 잘못되었습니다.'}, namespace='/')
         return
-
-    print("DEBUG: now =", now, "target_time =", game['target_time'])
-    if game['target_time'] <= now:
+    
+    print("Target time:", target_time)
+    if target_time <= now:
         socketio.emit('error', {'message': '미래 시각을 입력해주세요.'}, namespace='/')
         return
-
-    # 지속 시간 계산
-    duration = (game['target_time'] - now).total_seconds()
     
-    # 최종 회전 각도 미리 결정 (720~1440도 사이 랜덤)
-    final_angle = random.uniform(720, 1440)
-    game['current_angle'] = final_angle % 360
+    # Calculate duration and angles
+    duration = (target_time - now).total_seconds()
+    final_angle = random.uniform(720, 1440)  # 2-4 full rotations
     
-    # 당첨자 계산 (12시 방향 화살표)
-    winner = determine_winner_at_position(final_angle)
-    game['final_winner'] = winner
+    # Choose a random winner based on weights
+    weighted_names = []
+    for name, count in zip(names, counts):
+        weighted_names.extend([name] * count)
     
-    print(f"최종 각도: {final_angle}, 당첨자: {winner}")
+    winner = random.choice(weighted_names)
+    print(f"Selected winner: {winner}, final angle: {final_angle}")
     
-    # 게임 상태 업데이트
-    game['running'] = True
-    
-    # 클라이언트에게 모든 정보를 한 번에 전송
+    # Send start_game event with all data
     socketio.emit('start_game', {
         'duration': duration,
         'finalAngle': final_angle,
-        'endTime': game['target_time'].isoformat(),
         'winner': winner
     }, namespace='/')
     
-    # 비프음 재생
+    # Play sound
     socketio.emit('play_beep', namespace='/')
     
-    # 종료 시간에 팡파레 및 당첨자 알림을 위한 타이머 설정
-    def schedule_end_notification():
+    # Schedule end notification
+    def notify_end():
         socketio.sleep(duration)
+        print(f"Game ended, winner: {winner}")
         socketio.emit('update_winner', {'winner': winner}, namespace='/')
         socketio.emit('play_fanfare', namespace='/')
-        game['running'] = False
     
-    # 백그라운드 작업으로 타이머 실행
-    socketio.start_background_task(schedule_end_notification)
-
-def determine_winner_at_position(angle):
-    """
-    회전 완료 후 최종 각도에서 당첨자를 결정하는 함수
-    화살표는 12시 방향(0도)에 고정되어 있고, 원판이 시계 방향으로 회전한다고 가정
-    
-    각도가 0도일 때 첫 번째 섹터가 화살표 아래에 오므로, 
-    회전 각도와 각 섹터의 시작/끝 각도를 비교하여 당첨자를 결정
-    """
-    final_position = angle % 360  # 최종 회전 각도 (0-360도)
-    
-    # Chart.js의 0도는 원판의 오른쪽(3시 방향)이지만, 
-    # 우리는 12시 방향(원판 위쪽)에 화살표가 있어서 조정 필요
-    adjusted_position = (270 - final_position) % 360
-    
-    print(f"회전각: {final_position}°, 조정된 위치: {adjusted_position}°")
-    
-    # 각 섹터의 범위를 계산하고 화살표 위치와 비교
-    cumulative_angle = 0
-    
-    # 디버깅: 모든 섹터의 범위 출력
-    for i, (name, count) in enumerate(zip(names, counts)):
-        sector_size = (count / total_count) * 360
-        start_angle = cumulative_angle
-        end_angle = cumulative_angle + sector_size
-        print(f"#{i+1} {name}: {start_angle}° ~ {end_angle}° (크기: {sector_size}°)")
-        cumulative_angle += sector_size
-    
-    # 당첨자 결정을 위한 계산
-    cumulative_angle = 0
-    for name, count in zip(names, counts):
-        # 각 섹터의 크기 계산
-        sector_size = (count / total_count) * 360
-        
-        # 섹터의 시작과 끝 각도
-        start_angle = cumulative_angle
-        end_angle = cumulative_angle + sector_size
-        
-        # 화살표 위치가 이 섹터 내에 있는지 확인
-        if start_angle <= adjusted_position < end_angle:
-            print(f"당첨자 결정: {name} ({start_angle}° ~ {end_angle}°)")
-            return name
-        
-        cumulative_angle += sector_size
-    
-    # 360도 근처의 경계 처리
-    if adjusted_position >= cumulative_angle or adjusted_position < 0:
-        return names[0]
-    
-    # 기본값 반환
-    return names[-1]
-
-# 앱 시작 시 타이머 시작
-@app.before_first_request
-def start_cleanup():
-    cleanup_inactive_games()
+    socketio.start_background_task(notify_end)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
