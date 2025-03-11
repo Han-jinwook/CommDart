@@ -291,7 +291,8 @@
             return colors;
         }
 
- // index.html 파일의 socket.on('start_game', function(data) {...} 함수를 다음으로 교체하세요
+
+// index.html 파일의 socket.on('start_game', function(data) {...} 함수를 다음으로 교체하세요
 
 socket.on('start_game', function(data) {
     console.log('게임 시작:', data);
@@ -439,6 +440,7 @@ socket.on('start_game', function(data) {
         }
     }, totalDuration + 100); // 서버와의 약간의 시간차를 고려하여 100ms 추가
 });
+        
         // 카운트다운 함수
         function startCountdown(durationInSeconds) {
             // 이전 카운트다운이 있으면 정리
