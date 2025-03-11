@@ -192,15 +192,13 @@ def handle_start_rotation(data):
     # 최종 회전 각도 미리 결정 (720~1440도 사이 랜덤)
     final_angle = random.uniform(720, 1440)
     
-    # 화살표는 12시 방향(270도)에 고정됨
-    # 원판이 회전하는 각도에 따라 화살표의 상대적 위치 계산
-    # 여기서 문제가 있었음: current_angle을 final_angle % 360으로 설정하면 최종 회전 각도의 나머지만 저장됨
-    # 원판 자체는 final_angle만큼 회전함
+    # 화살표는 12시 방향(0도)에 고정됨
+    # 전체 회전 각도 저장
     game['current_angle'] = final_angle
     
-    # 화살표는 12시 방향(270도)에 고정되어 있음
-    # 원판의 회전 각도에 따라 당첨자 계산
-    pointer_angle = (270 - final_angle % 360) % 360
+    # 화살표가 가리키는 실제 각도 계산 (0도가 12시 방향)
+    # final_angle을 360으로 나눈 나머지를 사용하고, 반대 방향으로 조정
+    pointer_angle = final_angle % 360
     
     # 수정: 당첨자를 계산 함수를 통해 정확히 계산
     winner = calculate_winner_at_angle(pointer_angle)
@@ -236,6 +234,7 @@ def calculate_winner_at_angle(pointer_angle):
     # 각 섹터 배치를 계산하기 위한 설정
     cumulative_angle = 0.0
     
+    # 12시 방향(0도)부터 시계방향으로 각 세그먼트 배치
     for i, (name, cnt) in enumerate(zip(names, counts)):
         portion = cnt / total_count
         sector_size = portion * 360.0
@@ -245,20 +244,20 @@ def calculate_winner_at_angle(pointer_angle):
         # 디버깅을 위한 정보 출력
         print(f"DEBUG: Sector {i}: {name}, {sector_start}° ~ {sector_end}°, size: {sector_size}°")
         
+        # 화살표가 가리키는 각도가 현재 세그먼트의 범위 내에 있는지 확인
         if sector_start <= pointer_angle < sector_end:
             print(f"DEBUG: 당첨자 결정 - {name} (각도: {pointer_angle})")
             return name
         
         cumulative_angle += sector_size
     
-    # 경계 조건 처리 (0도 근처)
+    # 경계 조건 처리 (360도 근처)
     if pointer_angle >= cumulative_angle or pointer_angle < 0:
         print(f"DEBUG: 경계 조건 처리 - 첫 번째 참가자: {names[0]} (각도: {pointer_angle})")
         return names[0]
     
     print(f"DEBUG: 마지막 참가자 선택: {names[-1]} (각도: {pointer_angle})")
     return names[-1]
-
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=True)
