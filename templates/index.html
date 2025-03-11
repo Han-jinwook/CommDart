@@ -1,37 +1,192 @@
-<!-- 스크립트 내용을 다음으로 교체하세요 -->
-<script>
-    // 디버그 로그 함수
-    function log(message) {
-        console.log(message);
-        const debugEl = document.getElementById('debug');
-        if (debugEl) {
-            const time = new Date().toLocaleTimeString();
-            debugEl.innerHTML = `<div>[${time}] ${message}</div>` + debugEl.innerHTML;
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>썬드림 댓글 다트 로또게임</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
-    }
+        #header {
+            position: relative;
+            width: 100%;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            text-align: center;
+        }
+        #logout {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            text-decoration: none;
+        }
+        #main-container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+            max-width: 1200px;
+        }
+        #chart-container {
+            position: relative;
+            width: 600px;
+            height: 600px;
+            overflow: visible;
+        }
+        #rotating-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            transition: none;
+        }
+        /* 12시 방향 고정 화살표 */
+        #pointer {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 30px solid red;
+            z-index: 10;
+        }
+        #legend-container {
+            margin-left: 50px;
+            text-align: left;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+        }
+        #controls {
+            text-align: center;
+            margin: 10px 0;
+        }
+        #time-input-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        #target-time {
+            margin: 0 5px;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            padding: 12px 25px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #current-time {
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        #winner {
+            font-size: 1.5em;
+            color: #ff4500;
+            margin-top: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>썬드림 댓글 다트 로또게임</h1>
+        {% if user.is_authenticated %}
+            <a href="{{ url_for('logout') }}" id="logout">로그아웃</a>
+        {% endif %}
+    </div>
+    <div id="controls">
+        <p>현재 시간: <span id="current-time"></span></p>
+        {% if user.is_authenticated %}
+            <div id="main-container">
+                <div id="chart-container">
+                    <!-- 화살표는 12시 방향에 고정 -->
+                    <div id="pointer"></div>
+                    <div id="rotating-container">
+                        <canvas id="dart-chart"></canvas>
+                    </div>
+                </div>
+                <div id="legend-container">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: transparent;"></span>
+                        <strong>별명 / 댓글수</strong>
+                    </div>
+                    {% for p in participants %}
+                        <div class="legend-item">
+                            <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
+                            {{ p[0] }} / {{ p[1] }}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div id="time-input-container">
+                <input type="time" id="target-time" value="04:44">
+                <button id="start-button" onclick="startRotation()">시작</button>
+            </div>
+            <h2 id="winner"></h2>
+        {% else %}
+            <p>로그인이 필요합니다. <a href="{{ url_for('login') }}">로그인</a></p>
+        {% endif %}
+    </div>
 
-    // 전역 변수
-    let chart;
-    let currentAudio = null;
-    let socket;
+    <!-- Chart.js + DataLabels 플러그인 + Socket.IO 클라이언트 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        let chart;
+        let currentAudio = null;
 
-    // 차트 초기화
-    function initChart() {
-        try {
+        function initChart() {
             Chart.register(ChartDataLabels);
             const ctx = document.getElementById('dart-chart').getContext('2d');
-            
             chart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
                     labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
                     datasets: [{
                         data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
-                        backgroundColor: [{% for color in colors %}'{{ color }}',{% endfor %}]
+                        backgroundColor: generateColors({{ participants|length }})
                     }]
                 },
                 options: {
-                    rotation: -Math.PI / 2,
+                    rotation: -Math.PI / 2, // 시작 위치를 12시 방향(270도)으로 설정
                     animation: false,
                     plugins: {
                         legend: { display: false },
@@ -47,183 +202,134 @@
                     cutout: '60%'
                 }
             });
-            log("차트 초기화 완료");
-        } catch (e) {
-            log("차트 초기화 오류: " + e);
         }
-    }
 
-    // 사운드 재생 함수
-    function playSound(url) {
-        if (currentAudio) {
-            currentAudio.pause();
-            currentAudio.currentTime = 0;
+        function generateColors(count) {
+            const colors = [];
+            for (let i = 0; i < count; i++) {
+                colors.push(`hsl(${i * 360 / count}, 70%, 50%)`);
+            }
+            return colors;
         }
-        currentAudio = new Audio(url);
-        currentAudio.play().catch(e => log("오디오 오류: " + e));
-    }
 
-    // 시간 업데이트
-    function updateTime() {
-        const timeEl = document.getElementById('current-time');
-        if (timeEl) {
-            timeEl.innerText = new Date().toLocaleTimeString('ko-KR', { hour12: false });
-        }
-    }
-
-    // 시작 버튼 이벤트
-    function handleStartClick() {
-        log("시작 버튼 클릭");
-        const startBtn = document.getElementById('start-button');
-        if (startBtn) startBtn.disabled = true;
-        
-        const timeInput = document.getElementById('target-time').value;
-        if (!timeInput) {
-            alert('시간을 입력해주세요.');
-            if (startBtn) startBtn.disabled = false;
-            return;
-        }
-        
-        // UTC 시간 변환
-        const [hours, minutes] = timeInput.split(':').map(Number);
-        const localDate = new Date();
-        localDate.setHours(hours, minutes, 0, 0);
-        const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
-        const utcDate = new Date(utcMs);
-        
-        const utcHours = utcDate.getHours().toString().padStart(2, '0');
-        const utcMins = utcDate.getMinutes().toString().padStart(2, '0');
-        const utcSecs = utcDate.getSeconds().toString().padStart(2, '0');
-        const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
-        
-        log("시작 요청 전송: " + formattedTime);
-        socket.emit('start_rotation', { time: formattedTime });
-    }
-
-    // 초기화 버튼 이벤트
-    function handleResetClick() {
-        log("초기화 버튼 클릭");
-        socket.emit('reset_game');
-    }
-
-    // 페이지 로드 완료 시 실행
-    window.onload = function() {
-        log("페이지 로드됨");
-        
-        // Socket.IO 연결
-        try {
-            socket = io();
-            log("Socket.IO 연결 성공");
+        socket.on('start_game', function(data) {
+            console.log('게임 시작:', data);
+            document.getElementById('start-button').disabled = true;
             
-            // 이벤트 리스너 설정
-            socket.on('connect', function() {
-                log("서버에 연결됨");
-            });
+            // 서버에서 받은 게임 정보
+            const duration = data.duration; // 초 단위 지속 시간
+            const finalAngle = data.finalAngle; // 최종 회전 각도
+            const winner = data.winner; // 미리 결정된 당첨자
             
-            socket.on('disconnect', function() {
-                log("서버 연결 끊김");
-            });
+            // 애니메이션을 위한 변수
+            let startTime = Date.now();
+            const totalTime = duration * 1000; // 밀리초로 변환
             
-            socket.on('game_reset_complete', function() {
-                log("게임 초기화 완료");
-                const startBtn = document.getElementById('start-button');
-                if (startBtn) startBtn.disabled = false;
+            function animate() {
+                const now = Date.now();
+                const elapsed = now - startTime;
                 
-                const winnerEl = document.getElementById('winner');
-                if (winnerEl) winnerEl.innerText = '';
-                
-                const rotatingEl = document.getElementById('rotating-container');
-                if (rotatingEl) rotatingEl.style.transform = 'rotate(0deg)';
-            });
-            
-            socket.on('start_game', function(data) {
-                log(`게임 시작: 지속=${data.duration}초, 각도=${data.finalAngle}, 당첨자=${data.winner}`);
-                
-                const startBtn = document.getElementById('start-button');
-                if (startBtn) startBtn.disabled = true;
-                
-                // 간단한 애니메이션
-                const startTime = Date.now();
-                const duration = data.duration * 1000;
-                const finalAngle = data.finalAngle;
-                
-                function doAnimation() {
-                    const now = Date.now();
-                    const elapsed = now - startTime;
-                    const progress = Math.min(1.0, elapsed / duration);
-                    
-                    // 단순 선형 보간
-                    const angle = finalAngle * progress;
-                    
-                    const rotatingEl = document.getElementById('rotating-container');
-                    if (rotatingEl) {
-                        rotatingEl.style.transform = `rotate(${angle}deg)`;
-                        log(`애니메이션: ${Math.round(angle)}° (${Math.round(progress*100)}%)`);
-                    }
-                    
-                    if (progress < 1.0) {
-                        requestAnimationFrame(doAnimation);
-                    }
+                if (elapsed >= totalTime) {
+                    // 애니메이션 완료, 최종 위치로 설정
+                    document.getElementById('rotating-container').style.transform = 
+                        `rotate(${finalAngle}deg)`;
+                    return;
                 }
                 
-                doAnimation();
-            });
-            
-            socket.on('update_winner', function(data) {
-                log("당첨자: " + data.winner);
-                const winnerEl = document.getElementById('winner');
-                if (winnerEl) winnerEl.innerText = '당첨자: ' + data.winner + '님';
+                // 애니메이션 진행 계산 (초반 가속, 후반 감속)
+                const progress = elapsed / totalTime;
+                let currentAngle;
                 
-                const startBtn = document.getElementById('start-button');
-                if (startBtn) startBtn.disabled = false;
-            });
-            
-            socket.on('error', function(data) {
-                log("오류: " + data.message);
-                alert(data.message);
+                if (progress < 0.3) {
+                    // 초반 30% - 가속 단계
+                    const accelProgress = progress / 0.3;
+                    currentAngle = finalAngle * (accelProgress * accelProgress) * 0.4; // 최대 40%까지 가속
+                } else if (progress > 0.7) {
+                    // 후반 30% - 감속 단계
+                    const decelProgress = (progress - 0.7) / 0.3;
+                    const slowdown = 1 - (decelProgress * decelProgress);
+                    currentAngle = finalAngle * (0.8 + slowdown * 0.2); // 80%에서 100%로 감속
+                } else {
+                    // 중간 40% - 일정 속도
+                    currentAngle = finalAngle * (0.4 + (progress - 0.3) / 0.4 * 0.4); // 40%에서 80%까지
+                }
                 
-                const startBtn = document.getElementById('start-button');
-                if (startBtn) startBtn.disabled = false;
-            });
+                // 회전 적용
+                document.getElementById('rotating-container').style.transform = 
+                    `rotate(${currentAngle}deg)`;
+                
+                // 다음 프레임 요청
+                requestAnimationFrame(animate);
+            }
             
-            socket.on('play_beep', function() {
-                log("비프음 재생");
-                playSound('/static/beep.wav');
-            });
+            // 애니메이션 시작
+            animate();
+        });
+
+        socket.on('update_winner', function(data) {
+            document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
+            document.getElementById('start-button').disabled = false;
+        });
+
+        socket.on('error', function(data) {
+            alert(data.message);
+            document.getElementById('start-button').disabled = false;
+        });
+
+        socket.on('play_beep', function() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            currentAudio = new Audio('/static/beep.wav');
+            currentAudio.play().catch(() => console.log('Beep audio failed'));
+        });
+
+        socket.on('play_fanfare', function() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            currentAudio = new Audio('/static/fanfare.wav');
+            currentAudio.play().catch(() => console.log('Fanfare audio failed'));
+        });
+
+        function startRotation() {
+            console.log('시작 버튼 클릭됨');
+            document.getElementById('start-button').disabled = true;
             
-            socket.on('play_fanfare', function() {
-                log("팡파레 재생");
-                playSound('/static/fanfare.wav');
-            });
+            const timeInput = document.getElementById('target-time').value;
+            if (!timeInput) {
+                alert('시간을 입력해주세요.');
+                document.getElementById('start-button').disabled = false;
+                return;
+            }
             
-        } catch (e) {
-            log("Socket.IO 오류: " + e);
+            const [localH, localM] = timeInput.split(':').map(Number);
+            const localDate = new Date();
+            localDate.setHours(localH, localM, 0, 0);
+            const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
+            const utcDate = new Date(utcMs);
+            const utcHours = utcDate.getHours().toString().padStart(2, '0');
+            const utcMins = utcDate.getMinutes().toString().padStart(2, '0');
+            const utcSecs = utcDate.getSeconds().toString().padStart(2, '0');
+            const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
+            
+            console.log('Emitting start_rotation with UTC time:', formattedTime);
+            socket.emit('start_rotation', { time: formattedTime });
         }
-        
-        // 버튼 이벤트 리스너 설정
-        const startBtn = document.getElementById('start-button');
-        if (startBtn) {
-            startBtn.onclick = handleStartClick;
-            log("시작 버튼 이벤트 설정됨");
-        } else {
-            log("오류: 시작 버튼을 찾을 수 없음");
+
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').innerText =
+                now.toLocaleTimeString('ko-KR', { hour12: false });
         }
-        
-        const resetBtn = document.getElementById('reset-button');
-        if (resetBtn) {
-            resetBtn.onclick = handleResetClick;
-            log("초기화 버튼 이벤트 설정됨");
-        } else {
-            log("오류: 초기화 버튼을 찾을 수 없음");
-        }
-        
-        // 차트 초기화 및 시간 업데이트
-        initChart();
-        updateTime();
         setInterval(updateTime, 1000);
-        
-        // 디버그 영역 표시
-        const debugEl = document.getElementById('debug');
-        if (debugEl) debugEl.style.display = 'block';
-    };
-</script>
+
+        window.onload = function() {
+            initChart();
+            updateTime();
+        };
+    </script>
+</body>
+</html>
