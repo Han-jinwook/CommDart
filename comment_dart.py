@@ -255,25 +255,41 @@ def handle_start_rotation(data):
 
 def calculate_winner_at_angle(pointer_angle):
     """특정 각도에서의 당첨자를 계산하는 함수"""
-    # 12시 방향은 270도입니다. 
-    # 원판이 회전하는 동안 화살표는 고정된 12시 위치(270도)에 있습니다.
+    # 12시 방향은 270도(차트.js 기준)이지만, 회전 방향을 고려하여 조정
+    # 화살표는 고정된 12시 위치(0도)에 있으며, 원판이 회전합니다.
     
-    # 원판의 회전각도와 화살표의 위치(270도)를 고려하여 계산
-    sector_angle = (270 - pointer_angle) % 360
+    # 원판의 회전각도를 고려한 화살표 위치
+    effective_angle = pointer_angle % 360
     
+    # Chart.js는 0도가 12시 방향이 아닌 3시 방향이므로 270도 조정
+    chart_angle = (270 + effective_angle) % 360
+    
+    print(f"회전각도: {pointer_angle:.1f}°, 유효각도: {effective_angle:.1f}°, 차트각도: {chart_angle:.1f}°")
+    
+    # 각 참가자의 섹터 범위 계산 및 당첨자 찾기
     cumulative_angle = 0.0
     for name, cnt in zip(names, counts):
         portion = cnt / total_count
         sector_size = portion * 360.0
-        sector_start = cumulative_angle % 360
-        sector_end = (cumulative_angle + sector_size) % 360
+        sector_start = cumulative_angle
+        sector_end = cumulative_angle + sector_size
         
-        if in_arc_range(sector_angle, sector_start, sector_end):
-            print(f"WINNER: {name}, at angle {sector_angle:.1f}°")
+        print(f"섹터: {name}, 범위: {sector_start:.1f}° - {sector_end:.1f}°")
+        
+        # 차트 각도가 이 섹터 내에 있는지 확인
+        if sector_start <= chart_angle < sector_end:
+            print(f"당첨: {name}, 각도: {chart_angle:.1f}°")
             return name
         
         cumulative_angle += sector_size
     
+    # 마지막 범위 체크 (360도 주변)
+    if chart_angle >= cumulative_angle or chart_angle < 0:
+        print(f"당첨(경계): {names[0]}, 각도: {chart_angle:.1f}°")
+        return names[0]
+    
+    # 기본 값
+    print(f"당첨(기본): {names[-1]}")
     return names[-1]
 
 def in_arc_range(x, start, end):
