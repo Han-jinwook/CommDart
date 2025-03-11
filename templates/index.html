@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>썬드림 댓글 다트 로또게임</title>
+    <title>썬드림 게시글+댓글 룰렛추첨 이벤트</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -137,6 +137,13 @@
         #result-container {
             text-align: center;
             margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
         }
         #winner {
             font-size: 1.8em;
@@ -166,12 +173,19 @@
         @keyframes blink-animation {
             to { color: transparent; }
         }
+        /* 게임 레이아웃 컨테이너 */
+        #game-layout {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
     </style>
     <link rel="icon" href="data:,">
 </head>
 <body>
     <div id="header">
-        <h1>썬드림 댓글 다트 로또게임</h1>
+        <h1>썬드림 게시글+댓글 룰렛추첨 이벤트</h1>
         {% if user.is_authenticated %}
             <a href="{{ url_for('logout') }}" id="logout">로그아웃</a>
         {% endif %}
@@ -194,30 +208,33 @@
                 </div>
             </div>
             
-            <div id="main-container">
-                <div id="chart-container">
-                    <!-- 화살표는 12시 방향에 고정 -->
-                    <div id="pointer"></div>
-                    <div id="rotating-container">
-                        <canvas id="dart-chart"></canvas>
-                    </div>
-                </div>
-                <div id="legend-container">
-                    <div class="legend-item">
-                        <span class="legend-color" style="background-color: transparent;"></span>
-                        <strong>별명 / 댓글수</strong>
-                    </div>
-                    {% for p in participants %}
-                        <div class="legend-item">
-                            <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
-                            {{ p[0] }} / {{ p[1] }}
+            <div id="game-layout">
+                <div id="main-container">
+                    <div id="chart-container">
+                        <!-- 화살표는 12시 방향에 고정 -->
+                        <div id="pointer"></div>
+                        <div id="rotating-container">
+                            <canvas id="dart-chart"></canvas>
                         </div>
-                    {% endfor %}
+                    </div>
+                    <div id="legend-container">
+                        <div class="legend-item">
+                            <span class="legend-color" style="background-color: transparent;"></span>
+                            <strong>별명 / 댓글수</strong>
+                        </div>
+                        {% for p in participants %}
+                            <div class="legend-item">
+                                <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
+                                {{ p[0] }} / {{ p[1] }}
+                            </div>
+                        {% endfor %}
+                    </div>
                 </div>
-            </div>
-            <div id="result-container">
-                <h2 id="winner"></h2>
-                <div id="congratulation">썬드림 이벤트 당첨을 축하드립니다!! 🎉</div>
+                
+                <div id="result-container">
+                    <h2 id="winner"></h2>
+                    <div id="congratulation">썬드림 이벤트 당첨을 축하드립니다!! 🎉</div>
+                </div>
             </div>
         {% else %}
             <p>로그인이 필요합니다. <a href="{{ url_for('login') }}">로그인</a></p>
@@ -274,6 +291,47 @@
             return colors;
         }
 
+        // 사용자 정의 애니메이션 속도 함수
+        function customEasing(t, duration) {
+            // 총 시간을 단계별로 나눔 (초 단위)
+            const slowStartTime = 0; // 시작 - 천천히 시작
+            const accelerateTime = duration * 0.1; // 10% 지점부터 가속
+            const fastTime = duration * 0.3; // 30% 지점에 빠른 속도 도달
+            const decelerateTime = duration * 0.7; // 70% 지점부터 감속
+            const slowEndTime = duration * 0.9; // 90% 지점부터 매우 느리게
+            
+            // 현재 시간(t)이 어느 단계에 있는지 계산
+            const currentTime = t * duration;
+            
+            // 각 단계별 속도 계수
+            let speedFactor;
+            
+            if (currentTime < accelerateTime) {
+                // 시작 단계: 천천히 시작하고 점진적으로 가속
+                const progress = (currentTime - slowStartTime) / (accelerateTime - slowStartTime);
+                speedFactor = 0.3 + (progress * 0.7); // 0.3배속에서 시작하여 1배속으로 증가
+            } else if (currentTime < fastTime) {
+                // 가속 단계: 1배속에서 3배속으로 증가
+                const progress = (currentTime - accelerateTime) / (fastTime - accelerateTime);
+                speedFactor = 1 + (progress * 2); // 1배속에서 3배속으로 증가
+            } else if (currentTime < decelerateTime) {
+                // 고속 단계: 3배속 유지
+                speedFactor = 3;
+            } else if (currentTime < slowEndTime) {
+                // 감속 단계: 3배속에서 1배속으로 감소
+                const progress = (currentTime - decelerateTime) / (slowEndTime - decelerateTime);
+                speedFactor = 3 - (progress * 2); // 3배속에서 1배속으로 감소
+            } else {
+                // 종료 단계: 1배속에서 0.3배속으로 감소
+                const progress = (currentTime - slowEndTime) / (duration - slowEndTime);
+                speedFactor = 1 - (progress * 0.7); // 1배속에서 0.3배속으로 감소
+            }
+            
+            // 최대한 부드러운 애니메이션을 위해 이징 함수를 적용
+            // 실제 진행도에 속도 계수를 적용
+            return t * speedFactor;
+        }
+
         socket.on('start_game', function(data) {
             console.log('게임 시작:', data);
             document.getElementById('start-button').disabled = true;
@@ -303,12 +361,25 @@
                     // 애니메이션 완료, 최종 위치로 설정
                     document.getElementById('rotating-container').style.transform = 
                         `rotate(${finalAngle}deg)`;
+                    
+                    // 애니메이션 완료 후 0.5초 후에 당첨자 계산 결과 반영
+                    // 이렇게 하면 화면에 보이는 최종 위치와 당첨자 발표 사이에 미세한 시간차를 줄 수 있음
+                    setTimeout(() => {
+                        // 서버에서 이미 계산된 당첨자 정보를 사용
+                        socket.emit('confirm_winner');
+                    }, 500);
+                    
                     return;
                 }
                 
-                // 간단한 단조 증가 함수 사용
+                // 진행 비율 계산
                 const progress = elapsed / totalTime;
-                let currentAngle = finalAngle * progress;
+                
+                // 사용자 정의 이징 함수 적용
+                const easedProgress = customEasing(progress, duration);
+                
+                // 현재 회전 각도 계산
+                let currentAngle = finalAngle * easedProgress;
                 
                 // 방향 전환 방지 - 항상 이전 각도보다 크거나 같게 유지
                 if (currentAngle < lastAngle) {
