@@ -322,123 +322,69 @@ socket.on('start_game', function(data) {
         finalAngle,
         winner,
         startTime: Date.now(),
-        endTime: Date.now() + (duration * 1000),
-        animationCompleted: false // 애니메이션 완료 상태 추가
-    };
-    
-    // 회전 속도 계수 (조정된 속도)
-    const speedCoefficients = {
-        start: 0.3,        // 초기 속도
-        mid: 2.4,          // 중간 속도
-        end: 0.4,          // 종료 속도
-        accelerationTime: duration * 0.2,  // 전체 시간의 20%를 가속에 사용 (짧게)
-        constSpeedTime: duration * 0.5,    // 전체 시간의 50%를 일정 속도에 사용 (길게)
-        decelerationTime: duration * 0.3   // 전체 시간의 30%를 감속에 사용
+        endTime: Date.now() + (duration * 1000)
     };
     
     // 현재 각도를 저장할 변수
     let currentRotation = 0;
-    
-    // 정확한 타이밍을 위한 RAF 컨트롤
     let animationFrameId = null;
     
-    // 애니메이션 종료 함수
-    function finishAnimation() {
-        if (window.animationInfo.animationCompleted) return;
-        
-        // 정확한 최종 위치로 설정
-        document.getElementById('rotating-container').style.transform = 
-            `rotate(${finalAngle}deg)`;
-        
-        // 애니메이션 완료 상태 설정
-        window.animationInfo.animationCompleted = true;
-        
-        console.log('애니메이션 완료:', {
-            finalRotation: finalAngle + '도',
-            totalTime: ((Date.now() - window.animationInfo.startTime) / 1000).toFixed(2) + '초',
-            expectedTime: duration + '초'
-        });
-        
-        // 애니메이션 완료 후 당첨자 확인 (지연시간 없이 바로 확인)
-        socket.emit('confirm_winner');
-    }
-    
     // 애니메이션 함수
-    function rotateWheel(timestamp) {
-        // 이미 애니메이션이 완료되었으면 추가 작업 없이 종료
-        if (window.animationInfo.animationCompleted) return;
-        
+    function animate() {
         const now = Date.now();
         const elapsed = now - window.animationInfo.startTime;
         const totalDuration = duration * 1000;
         
         // 애니메이션이 완료되었는지 확인
         if (elapsed >= totalDuration) {
-            cancelAnimationFrame(animationFrameId);
-            finishAnimation();
+            // 애니메이션 완료, 최종 위치로 설정
+            document.getElementById('rotating-container').style.transform = 
+                `rotate(${finalAngle}deg)`;
+            
+            console.log('애니메이션 완료:', {
+                finalAngle: finalAngle + '도',
+                elapsedTime: (elapsed / 1000).toFixed(2) + '초'
+            });
+            
+            // 애니메이션 완료 후 바로 당첨자 확인
+            socket.emit('confirm_winner');
+            
             return;
         }
         
         // 진행률 계산 (0~1)
         const progress = elapsed / totalDuration;
         
-        // 애니메이션 단계 결정
-        let currentSpeed;
+        // 단순한 속도 조절 - 마지막 5초만 감속
+        let speedFactor = 1.0;
+        const remainingTime = totalDuration - elapsed;
         
-        if (progress < speedCoefficients.accelerationTime / duration) {
-            // 가속 단계: 천천히 시작해서 중간 속도까지 가속
-            const accelProgress = progress / (speedCoefficients.accelerationTime / duration);
-            currentSpeed = speedCoefficients.start + 
-                (speedCoefficients.mid - speedCoefficients.start) * easeInQuad(accelProgress);
-        } 
-        else if (progress < (speedCoefficients.accelerationTime + speedCoefficients.constSpeedTime) / duration) {
-            // 일정 속도 단계: 중간 속도 유지
-            currentSpeed = speedCoefficients.mid;
-        } 
-        else {
-            // 감속 단계: 중간 속도에서 종료 속도까지 감속
-            const decelProgress = (progress - (speedCoefficients.accelerationTime + speedCoefficients.constSpeedTime) / duration) / 
-                (speedCoefficients.decelerationTime / duration);
-            currentSpeed = speedCoefficients.mid + 
-                (speedCoefficients.end - speedCoefficients.mid) * easeOutQuad(decelProgress);
+        if (remainingTime < 5000) {  // 마지막 5초
+            // 5초부터 0초까지 선형적으로 1.0에서 0.3까지 감소
+            speedFactor = 0.3 + (remainingTime / 5000) * 0.7;
         }
         
-        // 현재 각도 계산
-        const angleIncrement = (finalAngle / totalDuration) * currentSpeed * 16.67; // 16.67ms는 약 60fps
-        currentRotation += angleIncrement;
-        
-        // 최종 각도를 초과하지 않도록 제한
-        currentRotation = Math.min(currentRotation, finalAngle);
+        // 현재 회전 각도 계산 (최종 각도에 진행률과 속도 계수를 곱함)
+        currentRotation = finalAngle * progress * speedFactor;
         
         // 회전 적용
         document.getElementById('rotating-container').style.transform = 
             `rotate(${currentRotation}deg)`;
         
         // 다음 프레임 요청
-        animationFrameId = requestAnimationFrame(rotateWheel);
-    }
-    
-    // 부드러운 가속을 위한 Easing 함수
-    function easeInQuad(t) {
-        return t * t;
-    }
-    
-    // 부드러운 감속을 위한 Easing 함수
-    function easeOutQuad(t) {
-        return t * (2 - t);
+        animationFrameId = requestAnimationFrame(animate);
     }
     
     // 애니메이션 시작
-    animationFrameId = requestAnimationFrame(rotateWheel);
+    animationFrameId = requestAnimationFrame(animate);
     
-    // 백업 타이머: 애니메이션 종료를 보장 (정확히 서버의 시간 계산과 일치하도록)
+    // 백업 타이머: 정확히 서버의 지속 시간 후에 애니메이션 종료를 보장
     setTimeout(() => {
-        if (!window.animationInfo.animationCompleted) {
-            console.log('백업 타이머로 애니메이션 종료');
-            cancelAnimationFrame(animationFrameId);
-            finishAnimation();
-        }
-    }, totalDuration + 100); // 서버와의 약간의 시간차를 고려하여 100ms 추가
+        cancelAnimationFrame(animationFrameId);
+        document.getElementById('rotating-container').style.transform = 
+            `rotate(${finalAngle}deg)`;
+        socket.emit('confirm_winner');
+    }, totalDuration + 50); // 서버와의 약간의 시간차를 고려
 });
         
         // 카운트다운 함수
