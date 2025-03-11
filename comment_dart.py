@@ -222,11 +222,10 @@ def handle_start_rotation(data):
     # 종료 시간에 팡파레 및 당첨자 알림을 위한 타이머 설정
     def schedule_end_notification():
         socketio.sleep(duration)
-        # 애니메이션 종료 후 클라이언트에서 confirm_winner 이벤트를 발생시키므로
-        # 여기서는 별도의 당첨자 발표 이벤트를 보내지 않음
-        # 대신 팡파레 소리는 미리 재생
+        # 팡파레 소리 재생 (당첨자 표시는 클라이언트 애니메이션 완료 후 confirm_winner에서 처리)
         socketio.emit('play_fanfare', namespace='/')
         game['running'] = False
+        print(f"DEBUG: 서버에서 예정된 종료 시간에 도달. 당첨자: {winner}")
     
     # 백그라운드 작업으로 타이머 실행
     socketio.start_background_task(schedule_end_notification)
@@ -240,9 +239,17 @@ def handle_confirm_winner():
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
     if user_id in games and games[user_id]['final_winner']:
         winner = games[user_id]['final_winner']
+        print(f"DEBUG: 확정된 당첨자: {winner}")
+        
+        # 당첨자 정보 전송
         socketio.emit('update_winner', {'winner': winner}, namespace='/')
+        
+        # 팡파레 소리는 이미 schedule_end_notification에서 재생했을 수 있지만,
+        # 타이밍 문제로 소리가 재생되지 않았을 경우를 대비해 다시 한번 재생
+        socketio.emit('play_fanfare', namespace='/')
     else:
         # 게임 정보가 없거나 당첨자가 설정되지 않은 경우 오류 메시지 전송
+        print("ERROR: 당첨자 정보를 찾을 수 없음")
         socketio.emit('error', {'message': '당첨자 정보를 찾을 수 없습니다.'}, namespace='/')
 
 def calculate_winner_at_angle(angle):
