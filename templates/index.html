@@ -122,6 +122,7 @@
             font-weight: bold;
         }
     </style>
+    <link rel="icon" href="data:,">
 </head>
 <body>
     <div id="header">
@@ -155,7 +156,7 @@
                 </div>
             </div>
             <div id="time-input-container">
-                <input type="time" id="target-time" value="04:44">
+                <input type="text" id="target-time" placeholder="HH:MM:SS" value="">
                 <button id="start-button" onclick="startRotation()">시작</button>
             </div>
             <h2 id="winner"></h2>
@@ -287,6 +288,27 @@
             currentAudio.play().catch(() => console.log('Fanfare audio failed'));
         });
 
+        // 현재 시간 업데이트 함수 수정
+        function updateTime() {
+            const now = new Date();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const seconds = now.getSeconds().toString().padStart(2, '0');
+            const timeString = `${hours}:${minutes}:${seconds}`;
+            
+            document.getElementById('current-time').innerText = timeString;
+            
+            // 처음 로드될 때 target-time 입력 필드에 현재 시간 + 1분을 기본값으로 설정
+            if (!document.getElementById('target-time').value) {
+                const laterDate = new Date(now.getTime() + 60000); // 현재 시간 + 1분
+                const laterHours = laterDate.getHours().toString().padStart(2, '0');
+                const laterMinutes = laterDate.getMinutes().toString().padStart(2, '0');
+                const laterSeconds = laterDate.getSeconds().toString().padStart(2, '0');
+                document.getElementById('target-time').value = `${laterHours}:${laterMinutes}:${laterSeconds}`;
+            }
+        }
+        
+        // startRotation 함수 수정
         function startRotation() {
             console.log('시작 버튼 클릭됨');
             document.getElementById('start-button').disabled = true;
@@ -298,9 +320,17 @@
                 return;
             }
             
-            const [localH, localM] = timeInput.split(':').map(Number);
+            // 시:분:초 형식 검증
+            const timePattern = /^([0-1][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/;
+            if (!timePattern.test(timeInput)) {
+                alert('시간 형식은 HH:MM:SS여야 합니다. (예: 15:30:00)');
+                document.getElementById('start-button').disabled = false;
+                return;
+            }
+            
+            const [localH, localM, localS] = timeInput.split(':').map(Number);
             const localDate = new Date();
-            localDate.setHours(localH, localM, 0, 0);
+            localDate.setHours(localH, localM, localS, 0);
             const utcMs = localDate.getTime() + (localDate.getTimezoneOffset() * 60000);
             const utcDate = new Date(utcMs);
             const utcHours = utcDate.getHours().toString().padStart(2, '0');
@@ -312,16 +342,11 @@
             socket.emit('start_rotation', { time: formattedTime });
         }
 
-        function updateTime() {
-            const now = new Date();
-            document.getElementById('current-time').innerText =
-                now.toLocaleTimeString('ko-KR', { hour12: false });
-        }
-        setInterval(updateTime, 1000);
-
         window.onload = function() {
             initChart();
             updateTime();
+            // 1초마다 시간 업데이트
+            setInterval(updateTime, 1000);
         };
     </script>
 </body>
