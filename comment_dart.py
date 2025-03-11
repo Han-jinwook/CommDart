@@ -192,20 +192,12 @@ def handle_start_rotation(data):
     # 최종 회전 각도 미리 결정 (720~1440도 사이 랜덤)
     final_angle = random.uniform(720, 1440)
     
+    # 화살표는 12시 방향(0도)에 고정됨
     # 전체 회전 각도 저장
     game['current_angle'] = final_angle
     
-    # 중요: Client의 Chart.js에서 rotation: -Math.PI/2로 설정되어 있음
-    # 즉, -90도 회전된 상태에서 시작함 (12시 방향이 0도가 됨)
-    # Chart.js는 반시계 방향이 양수, 시계 방향이 음수
-    
-    # 최종 회전 각도를 UI에 표시하기 위해 양수로 설정
-    # 클라이언트에서는 이 각도만큼 시계방향으로 회전함
-    client_final_angle = final_angle
-    
-    # 당첨자 결정을 위한 각도 계산 (실제 화살표가 가리키는 위치)
-    # 화살표는 12시 방향(0도)에 고정되어 있음
-    # 원판이 시계방향으로 회전하면 화살표의 상대 위치는 반시계 방향으로 이동하는 효과
+    # 화살표가 가리키는 실제 각도 계산 (0도가 12시 방향)
+    # 원판이 시계 방향으로 회전하면, 화살표의 상대적 위치는 반시계 방향으로 이동하는 효과
     relative_angle = 360 - (final_angle % 360)
     
     print(f"DEBUG: 최종 회전 각도: {final_angle}°, 상대 각도: {relative_angle}°")
@@ -220,7 +212,7 @@ def handle_start_rotation(data):
     # 클라이언트에게 모든 정보를 한 번에 전송
     socketio.emit('start_game', {
         'duration': duration,
-        'finalAngle': client_final_angle,
+        'finalAngle': final_angle,
         'winner': winner
     }, namespace='/')
     
@@ -230,12 +222,28 @@ def handle_start_rotation(data):
     # 종료 시간에 팡파레 및 당첨자 알림을 위한 타이머 설정
     def schedule_end_notification():
         socketio.sleep(duration)
-        socketio.emit('update_winner', {'winner': winner}, namespace='/')
+        # 애니메이션 종료 후 클라이언트에서 confirm_winner 이벤트를 발생시키므로
+        # 여기서는 별도의 당첨자 발표 이벤트를 보내지 않음
+        # 대신 팡파레 소리는 미리 재생
         socketio.emit('play_fanfare', namespace='/')
         game['running'] = False
     
     # 백그라운드 작업으로 타이머 실행
     socketio.start_background_task(schedule_end_notification)
+
+@socketio.on('confirm_winner')
+def handle_confirm_winner():
+    """
+    애니메이션 완료 후 당첨자 확인 이벤트 처리
+    클라이언트에서 애니메이션이 완료된 후 호출됨
+    """
+    user_id = current_user.id if current_user.is_authenticated else 'anonymous'
+    if user_id in games and games[user_id]['final_winner']:
+        winner = games[user_id]['final_winner']
+        socketio.emit('update_winner', {'winner': winner}, namespace='/')
+    else:
+        # 게임 정보가 없거나 당첨자가 설정되지 않은 경우 오류 메시지 전송
+        socketio.emit('error', {'message': '당첨자 정보를 찾을 수 없습니다.'}, namespace='/')
 
 def calculate_winner_at_angle(angle):
     """
