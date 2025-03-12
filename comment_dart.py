@@ -149,6 +149,7 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     print("Client disconnected:", request.sid)
+
 @socketio.on('reset_game')
 def handle_reset_game():
     print("Game reset request received")
@@ -169,7 +170,7 @@ def handle_start_rotation(data):
             'target_time': None,
             'current_angle': 0.0,
             'final_winner': None,
-            'winner_announced': False
+            'winner_announced': False  # 당첨자 발표 상태 추가
         }
     else:
         # 기존 게임 객체가 있으면 winner_announced 상태 초기화
@@ -196,6 +197,7 @@ def handle_start_rotation(data):
     duration = (game['target_time'] - now).total_seconds()
     
     # 최종 회전 각도 미리 결정 (720~1440도 사이 랜덤)
+    # 정확한 계산을 위해 소수점 자리까지 유지
     final_angle = random.uniform(720, 1440)
     
     # 화살표는 12시 방향(0도)에 고정됨
@@ -204,9 +206,10 @@ def handle_start_rotation(data):
     
     # 화살표가 가리키는 실제 각도 계산 (0도가 12시 방향)
     # 원판이 시계 방향으로 회전하면, 화살표의 상대적 위치는 반시계 방향으로 이동하는 효과
-    relative_angle = 360 - (final_angle % 360)
+    # 정확한 모듈로 연산 적용 후 정규화
+    relative_angle = (360 - (final_angle % 360)) % 360
     
-    print(f"DEBUG: 최종 회전 각도: {final_angle}°, 상대 각도: {relative_angle}°")
+    print(f"DEBUG: 최종 회전 각도: {final_angle:.2f}°, 상대 각도: {relative_angle:.2f}°")
     
     # 정확한 당첨자 계산 (화살표가 가리키는 섹터의 참가자)
     winner = calculate_winner_at_angle(relative_angle)
@@ -254,9 +257,9 @@ def handle_confirm_winner():
         else:
             # 당첨자 발표 표시
             games[user_id]['winner_announced'] = True
-            socketio.emit('update_winner', {'winner': winner}, namespace='/')
             
-            # 팡파레 소리 재생
+            # 당첨자 발표와 팡파레를 동시에 전송 (지연 없음)
+            socketio.emit('update_winner', {'winner': winner}, namespace='/')
             socketio.emit('play_fanfare', namespace='/')
     else:
         # 게임 정보가 없거나 당첨자가 설정되지 않은 경우 오류 메시지 전송
@@ -273,30 +276,45 @@ def calculate_winner_at_angle(angle):
     # 각 섹터 배치를 계산하기 위한 설정
     cumulative_angle = 0.0
     
-    # 각 참가자의 세그먼트 정보를 정확히 계산
+    # 각 참가자의 세그먼트 정보를 먼저 계산하고 저장
+    segments = []
+    
     for i, (name, cnt) in enumerate(zip(names, counts)):
         portion = cnt / total_count
         sector_size = portion * 360.0
         sector_start = cumulative_angle
         sector_end = cumulative_angle + sector_size
         
+        # 세그먼트 정보 저장
+        segments.append({
+            'name': name,
+            'start': sector_start,
+            'end': sector_end,
+            'size': sector_size
+        })
+        
         # 디버깅 정보 출력
         print(f"DEBUG: Sector {i}: {name}, {sector_start:.2f}° ~ {sector_end:.2f}°, size: {sector_size:.2f}°")
         
-        # 화살표가 현재 세그먼트 내에 있는지 확인
-        if sector_start <= angle < sector_end:
-            print(f"DEBUG: 당첨자 결정 - {name} (각도: {angle:.2f}°)")
-            return name
-        
         cumulative_angle += sector_size
     
+    # 입력 각도를 0-360 범위로 정규화
+    normalized_angle = angle % 360
+    
+    # 세그먼트별로 검사 - 정확한 범위 검사
+    for segment in segments:
+        # 화살표가 현재 세그먼트 내에 있는지 확인 (시작 경계도 포함)
+        if segment['start'] <= normalized_angle < segment['end']:
+            print(f"DEBUG: 당첨자 결정 - {segment['name']} (각도: {normalized_angle:.2f}°)")
+            return segment['name']
+    
     # 경계 조건 처리 (360도/0도 근처)
-    if angle >= cumulative_angle or angle < 0:
-        print(f"DEBUG: 경계 조건 처리 - 첫 번째 참가자: {names[0]} (각도: {angle:.2f}°)")
+    if normalized_angle >= segments[-1]['start'] or normalized_angle < segments[0]['start']:
+        print(f"DEBUG: 경계 조건 처리 - 첫 번째 참가자: {names[0]} (각도: {normalized_angle:.2f}°)")
         return names[0]
     
     # 여기까지 오면 오류 상황
-    print(f"ERROR: 당첨자를 결정할 수 없음 (각도: {angle:.2f}°)")
+    print(f"ERROR: 당첨자를 결정할 수 없음 (각도: {normalized_angle:.2f}°)")
     return names[0]  # 기본값으로 첫 번째 참가자 반환
 
 if __name__ == '__main__':
