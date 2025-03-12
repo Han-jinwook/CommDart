@@ -149,7 +149,6 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     print("Client disconnected:", request.sid)
-
 @socketio.on('reset_game')
 def handle_reset_game():
     print("Game reset request received")
