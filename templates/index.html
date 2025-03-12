@@ -256,7 +256,8 @@
         let fanfareSound = null;
         let beepLoopInterval = null;
         let currentBeepAudio = null; // 현재 재생 중인 비프음 객체 추적
-
+        let beepAudio = null; // 비프음 오디오 객체
+        
         // 색상 변환 도우미 함수
         function hexToRgba(hex, alpha) {
             // 기본 색상이 HSL 형식인 경우 흰색 배경 반환
@@ -364,29 +365,36 @@
                 console.error("오디오 파일 로드 실패:", e);
             }
         }
-// 비프음 반복 재생 함수
+// 비프음 재생 함수
 function startBeepLoop() {
-    stopBeepLoop(); // 기존 비프음 정리
+    // 기존 비프음 정리
+    stopBeepLoop();
     
-    console.log("비프음 반복 재생 시작");
+    console.log("비프음 재생 시작");
     
-    // 초기 비프음 재생
-    const audio = new Audio('/static/beep.mp3');
-    audio.play().catch(err => console.error("비프음 재생 실패:", err));
-    
-    // 0.8초마다 반복 재생
-    beepLoopInterval = setInterval(() => {
-        const audio = new Audio('/static/beep.mp3');
-        audio.play().catch(err => console.error("비프음 반복 실패:", err));
-    }, 800);
+    // 단일 오디오 객체 생성
+    beepAudio = new Audio('/static/beep.mp3');
+    beepAudio.loop = true; // 반복 재생 설정
+    beepAudio.play().catch(err => console.error("비프음 재생 실패:", err));
 }
 
 // 비프음 중지 함수
 function stopBeepLoop() {
+    if (beepAudio) {
+        try {
+            beepAudio.pause();
+            beepAudio.currentTime = 0;
+            beepAudio = null;
+        } catch(e) {
+            console.error("비프음 중지 중 오류:", e);
+        }
+        console.log("비프음 중지됨");
+    }
+    
+    // 인터벌 제거 (사용 중이었다면)
     if (beepLoopInterval) {
         clearInterval(beepLoopInterval);
         beepLoopInterval = null;
-        console.log("비프음 중지됨");
     }
 }
 
