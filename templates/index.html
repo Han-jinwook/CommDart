@@ -248,11 +248,13 @@
     <script>
         const socket = io();
         let chart;
-        let currentAudio = null;
         let countdownInterval = null;
         let targetDateTime = null;
+        
+        // 오디오 관련 변수
+        let beepSound = null;
+        let fanfareSound = null;
         let beepLoopInterval = null;
-        let isBeepPlaying = false;
 
         // 색상 변환 도우미 함수
         function hexToRgba(hex, alpha) {
@@ -329,129 +331,104 @@
             }
             return colors;
         }
-
-        // 소리 재생을 위한 도우미 함수
-        function playSound(soundName, loop = false) {
-            // 이미 해당 사운드가 반복 재생 중이면 중복 실행 방지
-            if (soundName === 'beep' && isBeepPlaying && loop) {
-                console.log('비프음이 이미 재생 중입니다.');
-                return;
-            }
+        
+        // 오디오 파일 확인 및 재생 관련 코드
+        function loadSounds() {
+            console.log("오디오 파일 로딩 시도");
             
-            // 기존 오디오 정리
-            stopAllSounds();
-            
-            // 다양한 파일 형식과 경로 시도
-            const formats = ['wav', 'mp3', 'ogg'];
+            // 가능한 경로 목록
             const paths = [
-                `/static/${soundName}.`,  // 기본 경로
-                `/static/sounds/${soundName}.`,  // sounds 하위 폴더
-                `/${soundName}.`,  // 루트 경로
-                `/sounds/${soundName}.`   // 루트의 sounds 폴더
+                '/static/',  // 표준 Flask 정적 파일 경로
+                '/static/sounds/',
+                '/',
+                '/sounds/'
             ];
             
-            // 브라우저 콘솔에 디버깅 정보 표시
-            console.log(`Attempting to play sound: ${soundName}, loop: ${loop}`);
-            
-            // 성공 플래그
-            let success = false;
-            let audioElement = null;
-            
-            // 가능한 모든 조합 시도
+            // 각 경로에서 파일 로드 시도
             for (const path of paths) {
-                for (const format of formats) {
+                for (const format of ['wav', 'mp3', 'ogg']) {
                     try {
-                        const audio = new Audio(path + format);
-                        
-                        // 소리 로딩 상태를 로그로 출력
-                        console.log(`Trying: ${path + format}`);
-                        
-                        // 소리 재생 시도
-                        audio.play().then(() => {
-                            // 성공 시 현재 오디오로 설정
-                            if (!success) {
-                                audioElement = audio;
-                                currentAudio = audio;
-                                success = true;
-                                console.log(`Successfully playing: ${path + format}`);
-                                
-                                // 비프음이고 반복 재생 옵션이 있는 경우
-                                if (soundName === 'beep' && loop) {
-                                    startBeepLoop(path + format);
-                                }
-                            }
-                        }).catch(err => {
-                            console.log(`Failed to play ${path + format}: ${err.message}`);
+                        // 비프음 테스트
+                        const beepTest = new Audio(path + 'beep.' + format);
+                        beepTest.volume = 1.0;
+                        beepTest.addEventListener('canplaythrough', () => {
+                            console.log(`비프음 로드 성공: ${path}beep.${format}`);
+                            beepSound = path + 'beep.' + format;
                         });
                         
-                        // 첫 번째 성공한 경우 루프 중단
-                        if (success) break;
+                        // 팡파레 테스트
+                        const fanfareTest = new Audio(path + 'fanfare.' + format);
+                        fanfareTest.volume = 1.0;
+                        fanfareTest.addEventListener('canplaythrough', () => {
+                            console.log(`팡파레 로드 성공: ${path}fanfare.${format}`);
+                            fanfareSound = path + 'fanfare.' + format;
+                        });
+                        
+                        // 로드 시도
+                        beepTest.load();
+                        fanfareTest.load();
                     } catch (e) {
-                        console.log(`Error creating audio element for ${path + format}: ${e.message}`);
+                        console.error(`${path} 경로에서 오디오 로드 실패:`, e);
                     }
                 }
-                if (success) break;
             }
             
-            // 모든 시도가 실패한 경우 안내 메시지
-            if (!success) {
-                console.warn(`Could not play sound: ${soundName}. Please check if sound files exist in the correct location.`);
+            // 찾지 못한 경우 기본 소리 설정
+            if (!beepSound) {
+                beepSound = '/static/beep.mp3';
             }
-            
-            return audioElement;
+            if (!fanfareSound) {
+                fanfareSound = '/static/fanfare.mp3';
+            }
         }
 
-        // 비프음 반복 재생 시작
-        function startBeepLoop(soundPath) {
-            // 이미 반복 중이면 중단
-            if (isBeepPlaying) {
-                stopBeepLoop();
+        // 비프음 반복 재생
+        function startBeepLoop() {
+            if (beepLoopInterval) {
+                clearInterval(beepLoopInterval);
             }
             
-            isBeepPlaying = true;
+            console.log("비프음 반복 재생 시작, 소리 파일:", beepSound);
             
-            // 비프음 소리 길이에 따라 다음 비프음 재생 시간 조정 (밀리초 단위)
-            const beepInterval = 1000; // 1초마다 재생 (필요에 따라 조정)
+            // 초기 비프음 재생 (사용자 상호작용 후 즉시 재생)
+            const audio = new Audio(beepSound);
+            audio.volume = 1.0;
+            audio.play()
+                .then(() => console.log("비프음 재생 성공"))
+                .catch(err => console.error("비프음 재생 실패:", err));
             
-            // 비프음 반복 재생 인터벌 설정
+            // 1초마다 비프음 반복 재생
             beepLoopInterval = setInterval(() => {
-                if (currentAudio) {
-                    currentAudio.pause();
-                    currentAudio.currentTime = 0;
-                }
-                
-                // 새 오디오 객체 생성 (반복 재생을 위해)
-                currentAudio = new Audio(soundPath);
-                currentAudio.play().catch(err => {
-                    console.error('비프음 반복 재생 중 오류:', err);
-                });
-            }, beepInterval);
-            
-            console.log('비프음 반복 재생 시작');
+                const audio = new Audio(beepSound);
+                audio.volume = 1.0;
+                audio.play()
+                    .catch(err => console.error("비프음 반복 재생 중 오류:", err));
+            }, 1000);
         }
 
-        // 비프음 반복 재생 중지
+        // 비프음 중지
         function stopBeepLoop() {
             if (beepLoopInterval) {
                 clearInterval(beepLoopInterval);
                 beepLoopInterval = null;
+                console.log("비프음 반복 재생 중지");
             }
+        }
+
+        // 팡파레 재생
+        function playFanfare() {
+            console.log("팡파레 재생, 소리 파일:", fanfareSound);
             
-            isBeepPlaying = false;
-            console.log('비프음 반복 재생 중지');
+            const audio = new Audio(fanfareSound);
+            audio.volume = 1.0;
+            audio.play()
+                .then(() => console.log("팡파레 재생 성공"))
+                .catch(err => console.error("팡파레 재생 실패:", err));
         }
 
         // 모든 소리 재생 중지
         function stopAllSounds() {
-            // 비프음 반복 정지
             stopBeepLoop();
-            
-            // 현재 재생 중인 오디오 정지
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
-                currentAudio = null;
-            }
         }
 
         socket.on('start_game', function(data) {
@@ -651,13 +628,14 @@
         });
 
         socket.on('play_beep', function() {
-            playSound('beep', true); // 두 번째 매개변수를 true로 설정하여 반복 재생 활성화
+            console.log("비프음 재생 요청 수신");
+            startBeepLoop(); // 비프음 반복 재생 시작
         });
 
         socket.on('play_fanfare', function() {
-            // 모든 소리 정지하고 팡파레 재생
-            stopAllSounds();
-            playSound('fanfare');
+            console.log("팡파레 재생 요청 수신");
+            stopBeepLoop(); // 비프음 중지
+            playFanfare(); // 팡파레 재생
         });
 
         // 현재 시간 업데이트 함수
@@ -668,13 +646,10 @@
             const seconds = now.getSeconds().toString().padStart(2, '0');
             const timeString = `${hours}:${minutes}:${seconds}`;
             
-            // 현재 시간 표시 - 확실하게 설정
+            // 현재 시간 표시
             const currentTimeElement = document.getElementById('current-time');
             if (currentTimeElement) {
                 currentTimeElement.innerText = timeString;
-                console.log("현재 시간 업데이트:", timeString);
-            } else {
-                console.error("현재 시간 표시 요소를 찾을 수 없습니다");
             }
             
             // 처음 로드될 때만 target-time 입력 필드에 현재 시간 + 1분을 기본값으로 설정
@@ -685,7 +660,6 @@
                 const laterMinutes = laterDate.getMinutes().toString().padStart(2, '0');
                 const laterSeconds = laterDate.getSeconds().toString().padStart(2, '0');
                 targetTimeElement.value = `${laterHours}:${laterMinutes}:${laterSeconds}`;
-                console.log("기본 슈팅시간 설정:", targetTimeElement.value);
             }
         }
         
@@ -723,12 +697,25 @@
             socket.emit('start_rotation', { time: formattedTime });
         }
 
+        // 소리 직접 테스트
+        function testSound() {
+            const beep = new Audio('/static/beep.mp3');
+            beep.play().then(() => {
+                console.log("사용자 상호작용으로 비프음 테스트 성공");
+            }).catch(err => {
+                console.error("비프음 테스트 실패:", err);
+            });
+        }
+
         // 페이지 로드 완료 시 실행
         window.onload = function() {
             console.log("페이지 로드 완료");
             
             // 모든 소리 정지
             stopAllSounds();
+            
+            // 오디오 파일 로드
+            loadSounds();
             
             // 차트 초기화
             try {
@@ -740,11 +727,16 @@
             
             // 시간 업데이트 즉시 실행
             updateTime();
-            console.log("초기 시간 업데이트 완료");
             
             // 1초마다 시간 업데이트
             setInterval(updateTime, 1000);
             console.log("시간 업데이트 타이머 설정 완료");
+            
+            // 시작 버튼에 클릭 리스너 추가 (소리 재생 권한 획득용)
+            document.getElementById('start-button').addEventListener('click', function() {
+                // 사용자 클릭 시 소리 테스트 (브라우저 권한 획득)
+                testSound();
+            });
         };
     </script>
 </body>
