@@ -251,6 +251,8 @@
         let currentAudio = null;
         let countdownInterval = null;
         let targetDateTime = null;
+        let beepLoopInterval = null;
+        let isBeepPlaying = false;
 
         // 색상 변환 도우미 함수
         function hexToRgba(hex, alpha) {
@@ -329,11 +331,15 @@
         }
 
         // 소리 재생을 위한 도우미 함수
-        function playSound(soundName) {
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
+        function playSound(soundName, loop = false) {
+            // 이미 해당 사운드가 반복 재생 중이면 중복 실행 방지
+            if (soundName === 'beep' && isBeepPlaying && loop) {
+                console.log('비프음이 이미 재생 중입니다.');
+                return;
             }
+            
+            // 기존 오디오 정리
+            stopAllSounds();
             
             // 다양한 파일 형식과 경로 시도
             const formats = ['wav', 'mp3', 'ogg'];
@@ -345,10 +351,11 @@
             ];
             
             // 브라우저 콘솔에 디버깅 정보 표시
-            console.log(`Attempting to play sound: ${soundName}`);
+            console.log(`Attempting to play sound: ${soundName}, loop: ${loop}`);
             
             // 성공 플래그
             let success = false;
+            let audioElement = null;
             
             // 가능한 모든 조합 시도
             for (const path of paths) {
@@ -363,9 +370,15 @@
                         audio.play().then(() => {
                             // 성공 시 현재 오디오로 설정
                             if (!success) {
+                                audioElement = audio;
                                 currentAudio = audio;
                                 success = true;
                                 console.log(`Successfully playing: ${path + format}`);
+                                
+                                // 비프음이고 반복 재생 옵션이 있는 경우
+                                if (soundName === 'beep' && loop) {
+                                    startBeepLoop(path + format);
+                                }
                             }
                         }).catch(err => {
                             console.log(`Failed to play ${path + format}: ${err.message}`);
@@ -383,6 +396,61 @@
             // 모든 시도가 실패한 경우 안내 메시지
             if (!success) {
                 console.warn(`Could not play sound: ${soundName}. Please check if sound files exist in the correct location.`);
+            }
+            
+            return audioElement;
+        }
+
+        // 비프음 반복 재생 시작
+        function startBeepLoop(soundPath) {
+            // 이미 반복 중이면 중단
+            if (isBeepPlaying) {
+                stopBeepLoop();
+            }
+            
+            isBeepPlaying = true;
+            
+            // 비프음 소리 길이에 따라 다음 비프음 재생 시간 조정 (밀리초 단위)
+            const beepInterval = 1000; // 1초마다 재생 (필요에 따라 조정)
+            
+            // 비프음 반복 재생 인터벌 설정
+            beepLoopInterval = setInterval(() => {
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                }
+                
+                // 새 오디오 객체 생성 (반복 재생을 위해)
+                currentAudio = new Audio(soundPath);
+                currentAudio.play().catch(err => {
+                    console.error('비프음 반복 재생 중 오류:', err);
+                });
+            }, beepInterval);
+            
+            console.log('비프음 반복 재생 시작');
+        }
+
+        // 비프음 반복 재생 중지
+        function stopBeepLoop() {
+            if (beepLoopInterval) {
+                clearInterval(beepLoopInterval);
+                beepLoopInterval = null;
+            }
+            
+            isBeepPlaying = false;
+            console.log('비프음 반복 재생 중지');
+        }
+
+        // 모든 소리 재생 중지
+        function stopAllSounds() {
+            // 비프음 반복 정지
+            stopBeepLoop();
+            
+            // 현재 재생 중인 오디오 정지
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                currentAudio = null;
             }
         }
 
@@ -532,6 +600,9 @@
         }
 
         socket.on('update_winner', function(data) {
+            // 소리 정지
+            stopAllSounds();
+            
             document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
             document.getElementById('start-button').disabled = false;
             
@@ -572,15 +643,20 @@
         });
 
         socket.on('error', function(data) {
+            // 소리 정지
+            stopAllSounds();
+            
             alert(data.message);
             document.getElementById('start-button').disabled = false;
         });
 
         socket.on('play_beep', function() {
-            playSound('beep');
+            playSound('beep', true); // 두 번째 매개변수를 true로 설정하여 반복 재생 활성화
         });
 
         socket.on('play_fanfare', function() {
+            // 모든 소리 정지하고 팡파레 재생
+            stopAllSounds();
             playSound('fanfare');
         });
 
@@ -650,6 +726,9 @@
         // 페이지 로드 완료 시 실행
         window.onload = function() {
             console.log("페이지 로드 완료");
+            
+            // 모든 소리 정지
+            stopAllSounds();
             
             // 차트 초기화
             try {
