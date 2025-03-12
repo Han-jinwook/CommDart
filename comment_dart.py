@@ -154,6 +154,8 @@ def handle_reset_game():
     print("Game reset request received")
     socketio.emit('game_reset_complete', namespace='/')
 
+# 당첨자 계산 로직 부분 수정
+
 @socketio.on('start_rotation')
 def handle_start_rotation(data):
     """
@@ -196,6 +198,7 @@ def handle_start_rotation(data):
     duration = (game['target_time'] - now).total_seconds()
     
     # 최종 회전 각도 미리 결정 (720~1440도 사이 랜덤)
+    # 정확한 계산을 위해 360의 배수로 반올림하지 않음
     final_angle = random.uniform(720, 1440)
     
     # 화살표는 12시 방향(0도)에 고정됨
@@ -204,9 +207,10 @@ def handle_start_rotation(data):
     
     # 화살표가 가리키는 실제 각도 계산 (0도가 12시 방향)
     # 원판이 시계 방향으로 회전하면, 화살표의 상대적 위치는 반시계 방향으로 이동하는 효과
-    relative_angle = 360 - (final_angle % 360)
+    # 클라이언트와의 일관성을 위해 final_angle을 그대로 사용하여 상대 각도 계산
+    relative_angle = (360 - (final_angle % 360)) % 360  # 정확한 모듈로 연산 적용
     
-    print(f"DEBUG: 최종 회전 각도: {final_angle}°, 상대 각도: {relative_angle}°")
+    print(f"DEBUG: 최종 회전 각도: {final_angle:.2f}°, 상대 각도: {relative_angle:.2f}°")
     
     # 정확한 당첨자 계산 (화살표가 가리키는 섹터의 참가자)
     winner = calculate_winner_at_angle(relative_angle)
@@ -216,6 +220,7 @@ def handle_start_rotation(data):
     game['running'] = True
     
     # 클라이언트에게 모든 정보를 한 번에 전송
+    # 클라이언트가 정확히 같은 최종 각도로 회전하도록 원래 값 그대로 전송
     socketio.emit('start_game', {
         'duration': duration,
         'finalAngle': final_angle,
@@ -228,13 +233,64 @@ def handle_start_rotation(data):
     # 종료 시간에 팡파레 및 당첨자 알림을 위한 타이머 설정
     def schedule_end_notification():
         socketio.sleep(duration)
-        # 종료 시간에 도달했음을 알리는 로그만 남기고,
-        # 당첨자 발표는 클라이언트의 애니메이션 완료 후 confirm_winner에서만 처리
+        # 정확한 타이밍을 위해 종료 시간에 메시지만 표시
         print(f"DEBUG: 서버에서 예정된 종료 시간에 도달. 예상 당첨자: {winner}")
         game['running'] = False
     
     # 백그라운드 작업으로 타이머 실행
     socketio.start_background_task(schedule_end_notification)
+
+def calculate_winner_at_angle(angle):
+    """
+    특정 각도에서의 당첨자를 계산하는 함수 
+    angle: 0도는 12시 방향, 시계방향으로 증가
+    """
+    print(f"DEBUG: 당첨자 계산에 사용되는 각도: {angle:.2f}°")
+    
+    # 각 섹터 배치를 계산하기 위한 설정
+    cumulative_angle = 0.0
+    
+    # 각 참가자의 세그먼트 정보를 정확히 계산하고 저장
+    segments = []
+    
+    # 먼저 모든 세그먼트의 각도 정보 계산
+    for i, (name, cnt) in enumerate(zip(names, counts)):
+        portion = cnt / total_count
+        sector_size = portion * 360.0
+        sector_start = cumulative_angle
+        sector_end = cumulative_angle + sector_size
+        
+        # 세그먼트 정보 저장
+        segments.append({
+            'name': name,
+            'start': sector_start,
+            'end': sector_end,
+            'size': sector_size
+        })
+        
+        # 디버깅 정보 출력
+        print(f"DEBUG: Sector {i}: {name}, {sector_start:.2f}° ~ {sector_end:.2f}°, size: {sector_size:.2f}°")
+        
+        cumulative_angle += sector_size
+    
+    # 입력 각도를 0-360 범위로 정규화
+    normalized_angle = angle % 360
+    
+    # 세그먼트별로 검사
+    for segment in segments:
+        # 화살표가 현재 세그먼트 내에 있는지 확인 (경계 포함)
+        if segment['start'] <= normalized_angle < segment['end']:
+            print(f"DEBUG: 당첨자 결정 - {segment['name']} (각도: {normalized_angle:.2f}°)")
+            return segment['name']
+    
+    # 경계 조건 처리 (360도/0도 근처)
+    if normalized_angle >= segments[-1]['start'] or normalized_angle < segments[0]['start']:
+        print(f"DEBUG: 경계 조건 처리 - 첫 번째 참가자: {names[0]} (각도: {normalized_angle:.2f}°)")
+        return names[0]
+    
+    # 여기까지 오면 오류 상황
+    print(f"ERROR: 당첨자를 결정할 수 없음 (각도: {normalized_angle:.2f}°)")
+    return names[0]  # 기본값으로 첫 번째 참가자 반환
 
 @socketio.on('confirm_winner')
 def handle_confirm_winner():
