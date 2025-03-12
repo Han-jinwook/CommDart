@@ -364,65 +364,31 @@
                 console.error("오디오 파일 로드 실패:", e);
             }
         }
-       // 비프음 반복 재생 - 개선된 버전
-        function startBeepLoop() {
-            // 이미 실행 중인 비프음 정리
-            stopBeepLoop();
-            
-            console.log("비프음 반복 재생 시작, 소리 파일:", beepSound);
-            
-            // 초기 비프음 재생
-            try {
-                currentBeepAudio = new Audio(beepSound);
-                currentBeepAudio.volume = 1.0;
-                currentBeepAudio.play()
-                    .then(() => console.log("비프음 재생 성공"))
-                    .catch(err => console.error("비프음 재생 실패:", err));
-            } catch (e) {
-                console.error("비프음 재생 중 오류:", e);
-            }
-            
-            // 1초마다 비프음 반복 재생
-            beepLoopInterval = setInterval(() => {
-                try {
-                    // 이전 오디오 객체 정리
-                    if (currentBeepAudio) {
-                        currentBeepAudio.pause();
-                        currentBeepAudio = null;
-                    }
-                    
-                    // 새 오디오 객체 생성 및 재생
-                    currentBeepAudio = new Audio(beepSound);
-                    currentBeepAudio.volume = 1.0;
-                    currentBeepAudio.play()
-                        .catch(err => console.error("비프음 반복 재생 중 오류:", err));
-                } catch (e) {
-                    console.error("비프음 반복 재생 중 오류:", e);
-                }
-            }, 1000);
-        }
+// 비프음 반복 재생 함수
+function startBeepLoop() {
+    stopBeepLoop(); // 기존 비프음 정리
+    
+    console.log("비프음 반복 재생 시작");
+    
+    // 초기 비프음 재생
+    const audio = new Audio('/static/beep.mp3');
+    audio.play().catch(err => console.error("비프음 재생 실패:", err));
+    
+    // 0.8초마다 반복 재생
+    beepLoopInterval = setInterval(() => {
+        const audio = new Audio('/static/beep.mp3');
+        audio.play().catch(err => console.error("비프음 반복 실패:", err));
+    }, 800);
+}
 
-        // 비프음 중지 - 개선된 버전
-        function stopBeepLoop() {
-            // 반복 타이머 중지
-            if (beepLoopInterval) {
-                clearInterval(beepLoopInterval);
-                beepLoopInterval = null;
-            }
-            
-            // 현재 재생 중인 오디오 중지
-            if (currentBeepAudio) {
-                try {
-                    currentBeepAudio.pause();
-                    currentBeepAudio.currentTime = 0;
-                    currentBeepAudio = null;
-                } catch (e) {
-                    console.error("비프음 중지 중 오류:", e);
-                }
-            }
-            
-            console.log("비프음 반복 재생 중지 완료");
-        }
+// 비프음 중지 함수
+function stopBeepLoop() {
+    if (beepLoopInterval) {
+        clearInterval(beepLoopInterval);
+        beepLoopInterval = null;
+        console.log("비프음 중지됨");
+    }
+}
 
         // 팡파레 재생 - 개선된 버전
         function playFanfare() {
@@ -490,27 +456,19 @@
                 const elapsed = now - startTime;
                 
                 // 애니메이션이 완료되었는지 확인
-                if (elapsed >= totalDuration) {
-                    if (!animationCompleted) {
-                        animationCompleted = true;
-                        
-                        // 최종 위치로 설정
-                        document.getElementById('rotating-container').style.transform = 
-                            `rotate(${finalAngle}deg)`;
-                        
-                        console.log('애니메이션 완료:', {
-                            finalAngle: finalAngle + '도',
-                            elapsedTime: (elapsed / 1000).toFixed(2) + '초'
-                        });
-                        
-                        // 비프음 중지 (애니메이션 완료 시점에서)
-                        stopBeepLoop();
-                        
-                        // 애니메이션 완료 후 바로 당첨자 확인
-                        socket.emit('confirm_winner');
-                    }
-                    return;
-                }
+// 애니메이션 완료 시
+if (elapsed >= totalDuration) {
+    // 최종 위치 설정
+    document.getElementById('rotating-container').style.transform = 
+        `rotate(${finalAngle}deg)`;
+    
+    // 비프음 중지
+    stopBeepLoop();
+    
+    // 당첨자 확인
+    socket.emit('confirm_winner');
+    return;
+}
                 
                 // 전체 진행률 (0-1 사이 값)
                 const progress = elapsed / totalDuration;
