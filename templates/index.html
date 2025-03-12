@@ -515,42 +515,70 @@
         });
 
         socket.on('play_beep', function() {
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
-            }
-            currentAudio = new Audio('/static/beep.wav');
-            currentAudio.play().catch(() => console.log('Beep audio failed'));
-        });
+    playSound('beep');
+});
 
-        socket.on('play_fanfare', function() {
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
-            }
-            currentAudio = new Audio('/static/fanfare.wav');
-            currentAudio.play().catch(() => console.log('Fanfare audio failed'));
-        });
+socket.on('play_fanfare', function() {
+    playSound('fanfare');
+});
 
-        // 현재 시간 업데이트 함수 수정
-        function updateTime() {
-            const now = new Date();
-            const hours = now.getHours().toString().padStart(2, '0');
-            const minutes = now.getMinutes().toString().padStart(2, '0');
-            const seconds = now.getSeconds().toString().padStart(2, '0');
-            const timeString = `${hours}:${minutes}:${seconds}`;
-            
-            document.getElementById('current-time').innerText = timeString;
-            
-            // 처음 로드될 때 target-time 입력 필드에 현재 시간 + 1분을 기본값으로 설정
-            if (!document.getElementById('target-time').value) {
-                const laterDate = new Date(now.getTime() + 60000); // 현재 시간 + 1분
-                const laterHours = laterDate.getHours().toString().padStart(2, '0');
-                const laterMinutes = laterDate.getMinutes().toString().padStart(2, '0');
-                const laterSeconds = laterDate.getSeconds().toString().padStart(2, '0');
-                document.getElementById('target-time').value = `${laterHours}:${laterMinutes}:${laterSeconds}`;
+// 소리 재생을 위한 도우미 함수 추가
+function playSound(soundName) {
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+    }
+    
+    // 다양한 파일 형식과 경로 시도
+    const formats = ['wav', 'mp3', 'ogg'];
+    const paths = [
+        `/static/${soundName}.`,  // 기본 경로
+        `/static/sounds/${soundName}.`,  // sounds 하위 폴더
+        `/${soundName}.`,  // 루트 경로
+        `/sounds/${soundName}.`   // 루트의 sounds 폴더
+    ];
+    
+    // 브라우저 콘솔에 디버깅 정보 표시
+    console.log(`Attempting to play sound: ${soundName}`);
+    
+    // 성공 플래그
+    let success = false;
+    
+    // 가능한 모든 조합 시도
+    for (const path of paths) {
+        for (const format of formats) {
+            try {
+                const audio = new Audio(path + format);
+                
+                // 소리 로딩 상태를 로그로 출력
+                console.log(`Trying: ${path + format}`);
+                
+                // 소리 재생 시도
+                audio.play().then(() => {
+                    // 성공 시 현재 오디오로 설정
+                    if (!success) {
+                        currentAudio = audio;
+                        success = true;
+                        console.log(`Successfully playing: ${path + format}`);
+                    }
+                }).catch(err => {
+                    console.log(`Failed to play ${path + format}: ${err.message}`);
+                });
+                
+                // 첫 번째 성공한 경우 루프 중단
+                if (success) break;
+            } catch (e) {
+                console.log(`Error creating audio element for ${path + format}: ${e.message}`);
             }
         }
+        if (success) break;
+    }
+    
+    // 모든 시도가 실패한 경우 안내 메시지
+    if (!success) {
+        console.warn(`Could not play sound: ${soundName}. Please check if sound files exist in the correct location.`);
+    }
+}
         
         // startRotation 함수 수정
         function startRotation() {
