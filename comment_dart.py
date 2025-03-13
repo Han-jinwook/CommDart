@@ -84,7 +84,7 @@ def logout():
         logout_user()
     return redirect(url_for('index'))
 
-# ----- 참가자 로딩 함수 (수정된 부분) -----
+# ----- 참가자 로딩 함수 (가나다순 정렬 추가) -----
 def load_participants(filename="participants.txt"):
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     participants_file = os.path.join(BASE_DIR, filename)
@@ -108,6 +108,10 @@ def load_participants(filename="participants.txt"):
 
         # participants 리스트를 생성하고, 별명 100개 이상이면 숫자로 대체
         participants = [(name, int(count)) for name, count in participants_dict.items()]
+        
+        # 가나다순으로 정렬 (이름 기준)
+        participants.sort(key=lambda x: x[0])
+        
         if len(participants) > 100:
             participants = [(f"{i+1}", count) for i, (name, count) in enumerate(participants)]
         return participants
