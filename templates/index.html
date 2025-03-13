@@ -255,9 +255,8 @@
         let beepSound = null;
         let fanfareSound = null;
         let beepLoopInterval = null;
-        let currentBeepAudio = null; // 현재 재생 중인 비프음 객체 추적
         let beepAudio = null; // 비프음 오디오 객체
-        
+
         // 색상 변환 도우미 함수
         function hexToRgba(hex, alpha) {
             // 기본 색상이 HSL 형식인 경우 흰색 배경 반환
@@ -342,61 +341,91 @@
             beepSound = '/static/beep.mp3';
             fanfareSound = '/static/fanfare.mp3';
             
-            // 오디오 객체 생성 및 테스트
+            // 테스트 코드 추가
+            console.log("소리 파일 설정 완료:", {
+                비프음: beepSound,
+                팡파레: fanfareSound
+            });
+            
+            // 오디오 프리로딩
+            const preloadAudio = (src) => {
+                return new Promise((resolve, reject) => {
+                    try {
+                        const audio = new Audio();
+                        audio.preload = 'auto';
+                        
+                        audio.addEventListener('canplaythrough', () => {
+                            console.log(`오디오 파일 로드 성공: ${src}`);
+                            resolve(true);
+                        }, { once: true });
+                        
+                        audio.addEventListener('error', (e) => {
+                            console.error(`오디오 파일 로드 실패: ${src}`, e);
+                            reject(e);
+                        }, { once: true });
+                        
+                        audio.src = src;
+                        audio.load();
+                    } catch (e) {
+                        console.error(`오디오 프리로딩 오류: ${src}`, e);
+                        reject(e);
+                    }
+                });
+            };
+            
+            // 비동기로 오디오 프리로딩
+            Promise.allSettled([
+                preloadAudio(beepSound),
+                preloadAudio(fanfareSound)
+            ]).then(results => {
+                console.log("오디오 파일 프리로딩 완료:", results);
+            });
+        }
+
+        // 비프음 재생 함수
+        function startBeepLoop() {
+            // 기존 비프음 정리
+            stopBeepLoop();
+            
+            console.log("비프음 재생 시작");
+            
+            // 단일 오디오 객체 생성
+            beepAudio = new Audio(beepSound);
+            beepAudio.loop = true; // 반복 재생 설정
+            beepAudio.play().catch(err => console.error("비프음 재생 실패:", err));
+        }
+
+        // 비프음 중지 함수
+        function stopBeepLoop() {
+            if (beepAudio) {
+                try {
+                    beepAudio.pause();
+                    beepAudio.currentTime = 0;
+                    beepAudio.src = ''; // src 비우기
+                    beepAudio = null;
+                } catch(e) {
+                    console.error("비프음 중지 중 오류:", e);
+                }
+                console.log("비프음 중지됨");
+            }
+            
+            // 인터벌 제거 (사용 중이었다면)
+            if (beepLoopInterval) {
+                clearInterval(beepLoopInterval);
+                beepLoopInterval = null;
+            }
+            
+            // 모든 오디오 요소 검사 및 중지
             try {
-                // 비프음 로드 테스트
-                const beepTest = new Audio(beepSound);
-                beepTest.volume = 1.0;
-                beepTest.addEventListener('canplaythrough', () => {
-                    console.log(`비프음 로드 성공: ${beepSound}`);
+                const allAudios = document.querySelectorAll('audio');
+                allAudios.forEach(audio => {
+                    audio.pause();
+                    audio.currentTime = 0;
                 });
-                
-                // 팡파레 로드 테스트
-                const fanfareTest = new Audio(fanfareSound);
-                fanfareTest.volume = 1.0;
-                fanfareTest.addEventListener('canplaythrough', () => {
-                    console.log(`팡파레 로드 성공: ${fanfareSound}`);
-                });
-                
-                // 로드 시도
-                beepTest.load();
-                fanfareTest.load();
-            } catch (e) {
-                console.error("오디오 파일 로드 실패:", e);
+            } catch(e) {
+                console.error("오디오 요소 중지 중 오류:", e);
             }
         }
-// 비프음 재생 함수
-function startBeepLoop() {
-    // 기존 비프음 정리
-    stopBeepLoop();
-    
-    console.log("비프음 재생 시작");
-    
-    // 단일 오디오 객체 생성
-    beepAudio = new Audio('/static/beep.mp3');
-    beepAudio.loop = true; // 반복 재생 설정
-    beepAudio.play().catch(err => console.error("비프음 재생 실패:", err));
-}
-
-// 비프음 중지 함수
-function stopBeepLoop() {
-    if (beepAudio) {
-        try {
-            beepAudio.pause();
-            beepAudio.currentTime = 0;
-            beepAudio = null;
-        } catch(e) {
-            console.error("비프음 중지 중 오류:", e);
-        }
-        console.log("비프음 중지됨");
-    }
-    
-    // 인터벌 제거 (사용 중이었다면)
-    if (beepLoopInterval) {
-        clearInterval(beepLoopInterval);
-        beepLoopInterval = null;
-    }
-}
 
         // 팡파레 재생 - 개선된 버전
         function playFanfare() {
@@ -404,7 +433,7 @@ function stopBeepLoop() {
             
             try {
                 const audio = new Audio(fanfareSound);
-                audio.volume = 1.0;
+                audio.volume = 0.8; // 볼륨 약간 낮춤
                 audio.play()
                     .then(() => console.log("팡파레 재생 성공"))
                     .catch(err => console.error("팡파레 재생 실패:", err));
@@ -417,7 +446,6 @@ function stopBeepLoop() {
         function stopAllSounds() {
             stopBeepLoop();
         }
-
         // 게임 시작 이벤트 처리
         socket.on('start_game', function(data) {
             console.log('게임 시작:', data);
@@ -458,25 +486,33 @@ function stopBeepLoop() {
             let animationFrameId = null;
             let animationCompleted = false; // 애니메이션 완료 상태 추적
             
-            // 애니메이션 함수
+            // 애니메이션 함수 - 수정됨 (접근법 1)
             function animate() {
                 const now = Date.now();
                 const elapsed = now - startTime;
                 
                 // 애니메이션이 완료되었는지 확인
-// 애니메이션 완료 시
-if (elapsed >= totalDuration) {
-    // 최종 위치 설정
-    document.getElementById('rotating-container').style.transform = 
-        `rotate(${finalAngle}deg)`;
-    
-    // 비프음 중지
-    stopBeepLoop();
-    
-    // 당첨자 확인
-    socket.emit('confirm_winner');
-    return;
-}
+                if (elapsed >= totalDuration) {
+                    if (!animationCompleted) {
+                        animationCompleted = true;
+                        
+                        // 최종 위치로 설정
+                        document.getElementById('rotating-container').style.transform = 
+                            `rotate(${finalAngle}deg)`;
+                        
+                        console.log('애니메이션 완료:', {
+                            finalAngle: finalAngle + '도',
+                            elapsedTime: (elapsed / 1000).toFixed(2) + '초'
+                        });
+                        
+                        // 비프음 중지
+                        stopBeepLoop();
+                        
+                        // 원판 멈춤과 당첨자 선택 동시에 처리 (지연 없음)
+                        socket.emit('confirm_winner');
+                    }
+                    return;
+                }
                 
                 // 전체 진행률 (0-1 사이 값)
                 const progress = elapsed / totalDuration;
@@ -509,7 +545,7 @@ if (elapsed >= totalDuration) {
                     // 비프음 중지 (백업 타이머에서도)
                     stopBeepLoop();
                     
-                    // 당첨자 확인 이벤트 발생
+                    // 원판 멈춤과 당첨자 선택 동시에 처리 (지연 없음)
                     socket.emit('confirm_winner');
                     
                     console.log('백업 타이머로 애니메이션 종료');
@@ -613,6 +649,30 @@ if (elapsed >= totalDuration) {
             }
         });
 
+        // 팡파레 재생 이벤트 처리 (수정됨)
+        socket.on('play_fanfare', function() {
+            console.log("팡파레 재생 요청 수신");
+            
+            // 모든 오디오 요소 찾아서 강제 중지
+            const allAudioElements = document.querySelectorAll('audio');
+            allAudioElements.forEach(audio => {
+                try {
+                    audio.pause();
+                    audio.currentTime = 0;
+                } catch(e) {
+                    console.error("오디오 중지 중 오류:", e);
+                }
+            });
+            
+            // 비프음 루프 중지
+            stopBeepLoop();
+            
+            // 약간 지연 후 팡파레 재생
+            setTimeout(() => {
+                playFanfare(); // 팡파레 재생
+            }, 100);
+        });
+
         // 에러 이벤트 처리
         socket.on('error', function(data) {
             // 소리 정지
@@ -627,14 +687,6 @@ if (elapsed >= totalDuration) {
             console.log("비프음 재생 요청 수신");
             startBeepLoop(); // 비프음 반복 재생 시작
         });
-
-        // 팡파레 재생 이벤트 처리
-        socket.on('play_fanfare', function() {
-            console.log("팡파레 재생 요청 수신");
-            stopBeepLoop(); // 비프음 중지
-            playFanfare(); // 팡파레 재생
-        });
-
         // 게임 리셋 이벤트 처리
         socket.on('game_reset_complete', function() {
             console.log("게임 리셋 완료");
@@ -664,119 +716,3 @@ if (elapsed >= totalDuration) {
             // 현재 시간 표시
             const currentTimeElement = document.getElementById('current-time');
             if (currentTimeElement) {
-                currentTimeElement.innerText = timeString;
-            }
-            
-            // 처음 로드될 때만 target-time 입력 필드에 현재 시간 + 1분을 기본값으로 설정
-            const targetTimeElement = document.getElementById('target-time');
-            if (targetTimeElement && !targetTimeElement.value) {
-                const laterDate = new Date(now.getTime() + 60000); // 현재 시간 + 1분
-                const laterHours = laterDate.getHours().toString().padStart(2, '0');
-                const laterMinutes = laterDate.getMinutes().toString().padStart(2, '0');
-                const laterSeconds = laterDate.getSeconds().toString().padStart(2, '0');
-                targetTimeElement.value = `${laterHours}:${laterMinutes}:${laterSeconds}`;
-            }
-        }
-        
-        // 시작 버튼 클릭 함수
-        function startRotation() {
-            console.log('시작 버튼 클릭됨');
-            document.getElementById('start-button').disabled = true;
-            
-            const timeInput = document.getElementById('target-time').value;
-            if (!timeInput) {
-                alert('시간을 입력해주세요.');
-                document.getElementById('start-button').disabled = false;
-                return;
-            }
-            
-            // 시:분:초 형식 검증
-            const timePattern = /^([0-1][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/;
-            if (!timePattern.test(timeInput)) {
-                alert('시간 형식은 HH:MM:SS여야 합니다. (예: 15:30:00)');
-                alert('시간 형식은 HH:MM:SS여야 합니다. (예: 15:30:00)');
-                document.getElementById('start-button').disabled = false;
-                return;
-            }
-            
-            // 소리 테스트 (브라우저 권한 획득)
-            testSound();
-            
-            // 로컬 시간을 UTC로 변환
-            const [localH, localM, localS] = timeInput.split(':').map(Number);
-            const localDate = new Date();
-            localDate.setHours(localH, localM, localS, 0);
-            const utcMs = localDate.getTime();
-            const utcDate = new Date(utcMs);
-            const utcHours = utcDate.getUTCHours().toString().padStart(2, '0');
-            const utcMins = utcDate.getUTCMinutes().toString().padStart(2, '0');
-            const utcSecs = utcDate.getUTCSeconds().toString().padStart(2, '0');
-            const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
-            
-            console.log('Emitting start_rotation with UTC time:', formattedTime);
-            socket.emit('start_rotation', { time: formattedTime });
-        }
-
-        // 소리 직접 테스트
-        function testSound() {
-            try {
-                const beep = new Audio('/static/beep.mp3');
-                beep.play().then(() => {
-                    console.log("사용자 상호작용으로 비프음 테스트 성공");
-                }).catch(err => {
-                    console.error("비프음 테스트 실패:", err);
-                });
-            } catch(e) {
-                console.error("소리 테스트 중 오류:", e);
-            }
-        }
-
-        // 페이지 로드 완료 시 실행
-        window.onload = function() {
-            console.log("페이지 로드 완료");
-            
-            // 모든 소리 정지
-            stopAllSounds();
-            
-            // 오디오 파일 로드
-            loadSounds();
-            
-            // 차트 초기화
-            try {
-                initChart();
-                console.log("차트 초기화 성공");
-            } catch(e) {
-                console.error("차트 초기화 오류:", e);
-            }
-            
-            // 시간 업데이트 즉시 실행
-            updateTime();
-            
-            // 1초마다 시간 업데이트
-            setInterval(updateTime, 1000);
-            console.log("시간 업데이트 타이머 설정 완료");
-            
-            // 시작 버튼에 클릭 리스너 추가 (소리 재생 권한 획득용)
-            document.getElementById('start-button').addEventListener('click', function() {
-                // 사용자 클릭 시 소리 테스트 (브라우저 권한 획득)
-                testSound();
-            });
-            
-            // 소켓 연결 상태 확인
-            socket.on('connect', function() {
-                console.log('서버에 연결되었습니다.');
-            });
-            
-            socket.on('disconnect', function() {
-                console.log('서버와 연결이 끊어졌습니다.');
-            });
-            
-            // 처음 로드 시 비프음 테스트 (사용자 상호작용 필요)
-            document.body.addEventListener('click', function firstClick() {
-                testSound();
-                document.body.removeEventListener('click', firstClick);
-            }, { once: true });
-        };
-    </script>
-</body>
-</html>
