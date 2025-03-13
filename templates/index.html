@@ -458,7 +458,7 @@ socket.on('start_game', function(data) {
     
     // 매우 중요: 원판 회전 방향을 고려한 화살표 위치 보정
     // 서버의 당첨자 계산과 일치하도록 finalAngle을 조정
-    const adjustedFinalAngle = finalAngle - 10; // 각도 조정 값은 테스트 필요
+    const adjustedFinalAngle = finalAngle + 10; // 각도 조정 값은 테스트 필요
     
     console.log('받은 회전 정보:', {
         duration: duration + '초',
