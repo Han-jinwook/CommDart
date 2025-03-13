@@ -789,52 +789,70 @@ socket.on('start_game', function(data) {
             }
         }
 
-        // 페이지 로드 완료 시 실행
-        window.onload = function() {
-            console.log("페이지 로드 완료");
-            
-            // 모든 소리 정지
-            stopAllSounds();
-            
-            // 오디오 파일 로드
-            loadSounds();
-            
-            // 차트 초기화
-            try {
-                initChart();
-                console.log("차트 초기화 성공");
-            } catch(e) {
-                console.error("차트 초기화 오류:", e);
-            }
-            
-            // 시간 업데이트 즉시 실행
-            updateTime();
-            
-            // 1초마다 시간 업데이트
-            setInterval(updateTime, 1000);
-            console.log("시간 업데이트 타이머 설정 완료");
-            
-            // 시작 버튼에 클릭 리스너 추가 (소리 재생 권한 획득용)
-            document.getElementById('start-button').addEventListener('click', function() {
-                // 사용자 클릭 시 소리 테스트 (브라우저 권한 획득)
-                testSound();
-            });
-            
-            // 소켓 연결 상태 확인
-            socket.on('connect', function() {
-                console.log('서버에 연결되었습니다.');
-            });
-            
-            socket.on('disconnect', function() {
-                console.log('서버와 연결이 끊어졌습니다.');
-            });
-            
-            // 처음 로드 시 비프음 테스트 (사용자 상호작용 필요)
-            document.body.addEventListener('click', function firstClick() {
-                testSound();
-                document.body.removeEventListener('click', firstClick);
-            }, { once: true });
-        };
+// 페이지 로드 완료 시 실행 함수 내에 다음 코드를 추가합니다
+window.onload = function() {
+    console.log("페이지 로드 완료");
+    
+    // 모든 소리 정지
+    stopAllSounds();
+    
+    // 오디오 파일 로드
+    loadSounds();
+    
+    // 차트 초기화
+    try {
+        initChart();
+        console.log("차트 초기화 성공");
+    } catch(e) {
+        console.error("차트 초기화 오류:", e);
+    }
+    
+    // 시간 업데이트 즉시 실행
+    updateTime();
+    
+    // 1초마다 시간 업데이트
+    setInterval(updateTime, 1000);
+    console.log("시간 업데이트 타이머 설정 완료");
+    
+    // 시작 버튼에만 클릭 리스너 추가 (소리 재생 권한 획득용)
+    document.getElementById('start-button').addEventListener('click', function() {
+        testSound();
+    });
+    
+    // 입력창 이벤트 설정 - 비프음 방지
+    const targetTimeInput = document.getElementById('target-time');
+    if (targetTimeInput) {
+        // 입력창 포커스 시 사운드 테스트 방지
+        targetTimeInput.addEventListener('focus', function(e) {
+            // 사운드 테스트 방지를 위한 플래그
+            e.stopPropagation(); // 이벤트 버블링 방지
+        });
+        
+        // 입력창 클릭 시 사운드 테스트 방지
+        targetTimeInput.addEventListener('click', function(e) {
+            e.stopPropagation(); // 이벤트 버블링 방지
+        });
+    }
+    
+    // 소켓 연결 상태 확인
+    socket.on('connect', function() {
+        console.log('서버에 연결되었습니다.');
+    });
+    
+    socket.on('disconnect', function() {
+        console.log('서버와 연결이 끊어졌습니다.');
+    });
+    
+    // 처음 로드 시 비프음 테스트는 이제 body에 대해서만 처리
+    // 입력창 클릭은 제외
+    document.body.addEventListener('click', function firstClick(e) {
+        // 입력창에 대한 클릭이 아닌 경우에만 사운드 테스트
+        if (e.target.id !== 'target-time') {
+            testSound();
+        }
+        document.body.removeEventListener('click', firstClick);
+    }, { once: true });
+};
     </script>
 </body>
 </html>
