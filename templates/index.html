@@ -190,56 +190,54 @@
             <a href="{{ url_for('logout') }}" id="logout">로그아웃</a>
         {% endif %}
     </div>
-    <div id="controls">
-        {% if user.is_authenticated %}
-            <div id="time-controls">
-                <div class="time-control-item">
-                    <span class="time-label">슈팅시간 설정:</span>
-                    <input type="text" id="target-time" placeholder="HH:MM:SS" value="">
-                    <button id="start-button" onclick="startRotation()">시작</button>
-                </div>
-                <div class="time-control-item">
-                    <span class="time-label">남은시간:</span>
-                    <span id="remaining-time" class="time-value">--:--:--</span>
-                </div>
-                <div class="time-control-item">
-                    <span class="time-label">현재시간:</span>
-                    <span id="current-time" class="time-value"></span>
+<div id="controls">
+    {% if user.is_authenticated %}
+        <div id="time-controls">
+            <div class="time-control-item">
+                <span class="time-label">슈팅시간 설정:</span>
+                <input type="text" id="target-time" placeholder="HH:MM:SS" value="">
+                <button id="start-button" onclick="startRotation()">시작</button>
+            </div>
+            <div class="time-control-item">
+                <span class="time-label">남은시간:</span>
+                <span id="remaining-time" class="time-value">--:--:--</span>
+            </div>
+            <div class="time-control-item">
+                <span class="time-label">현재시간:</span>
+                <span id="current-time" class="time-value"></span>
+            </div>
+        </div>
+    {% endif %}
+    
+    <div id="game-layout">
+        <div id="main-container">
+            <div id="chart-container">
+                <!-- 화살표는 12시 방향에 고정 -->
+                <div id="pointer"></div>
+                <div id="rotating-container">
+                    <canvas id="dart-chart"></canvas>
                 </div>
             </div>
-            
-            <div id="game-layout">
-                <div id="main-container">
-                    <div id="chart-container">
-                        <!-- 화살표는 12시 방향에 고정 -->
-                        <div id="pointer"></div>
-                        <div id="rotating-container">
-                            <canvas id="dart-chart"></canvas>
-                        </div>
-                    </div>
-                    <div id="legend-container">
-                        <div class="legend-item">
-                            <span class="legend-color" style="background-color: transparent;"></span>
-                            <strong>별명 / 댓글수</strong>
-                        </div>
-                        {% for p in participants %}
-                            <div class="legend-item">
-                                <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
-                                {{ p[0] }} / {{ p[1] }}
-                            </div>
-                        {% endfor %}
-                    </div>
+            <div id="legend-container">
+                <div class="legend-item">
+                    <span class="legend-color" style="background-color: transparent;"></span>
+                    <strong>별명 / 댓글수</strong>
                 </div>
-                
-                <div id="result-container">
-                    <h2 id="winner"></h2>
-                    <div id="congratulation">썬드림 이벤트 당첨을 축하드립니다!! 🎉</div>
-                </div>
+                {% for p in participants %}
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
+                        {{ p[0] }} / {{ p[1] }}
+                    </div>
+                {% endfor %}
             </div>
-        {% else %}
-            <p>로그인이 필요합니다. <a href="{{ url_for('login') }}">로그인</a></p>
-        {% endif %}
+        </div>
+        
+        <div id="result-container">
+            <h2 id="winner"></h2>
+            <div id="congratulation">썬드림 이벤트 당첨을 축하드립니다!! 🎉</div>
+        </div>
     </div>
+</div>
 
     <!-- Chart.js + DataLabels 플러그인 + Socket.IO 클라이언트 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
