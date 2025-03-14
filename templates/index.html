@@ -732,14 +732,14 @@ function updateTime() {
         const targetSeconds = targetDate.getSeconds().toString().padStart(2, '0');
         const targetTimeString = `${targetHours}:${targetMinutes}:${targetSeconds}`;
 
-        // 타겟 시간 표시 업데이트
+// 타겟 시간 표시 업데이트
 const targetTimeDisplay = document.getElementById('target-time-display');
 if (targetTimeDisplay) {
-    targetTimeDisplay.innerText = `${hours}:${minutes}:${seconds}`;
+    targetTimeDisplay.innerText = targetTimeString;
 }
 const guestTargetTimeDisplay = document.getElementById('guest-target-time-display');
 if (guestTargetTimeDisplay) {
-    guestTargetTimeDisplay.innerText = `${hours}:${minutes}:${seconds}`;
+    guestTargetTimeDisplay.innerText = targetTimeString;
 }
         
         const adjustedFinalAngle = finalAngle + 2;
