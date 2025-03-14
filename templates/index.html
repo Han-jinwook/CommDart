@@ -300,55 +300,70 @@
             }
         }
 
-        function initChart() {
-            Chart.register(ChartDataLabels);
-            const ctx = document.getElementById('dart-chart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
-                    datasets: [{
-                        data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
-                        backgroundColor: generateColors({{ participants|length }})
-                    }]
-                },
-                options: {
-                    rotation: -Math.PI / 2, // 시작 위치를 12시 방향(270도)으로 설정
-                    animation: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { enabled: false },
-                        datalabels: {
-                            color: '#000',
-                            formatter: function(value, context) {
-                                return context.chart.data.labels[context.dataIndex];
-                            },
-                            font: { 
-                                size: 14,
-                                weight: 'bold'
-                            },
-                            // 레이블 위치 및 정렬 개선
-                            align: 'center',
-                            anchor: 'center',
-                            // 텍스트 밖으로 넘치지 않도록 줄바꿈 설정
-                            clamp: true,
-                            // 원 안쪽으로 텍스트 위치 조정
-                            offset: 0,
-                            // 텍스트에 배경색 추가하여 가독성 향상
-                            backgroundColor: function(context) {
-                                return hexToRgba(context.dataset.backgroundColor[context.dataIndex], 0.7);
-                            },
-                            borderRadius: 4,
-                            padding: 4,
-                            // 줄바꿈 - 긴 텍스트 처리
-                            textAlign: 'center'
-                        }
+function initChart() {
+    console.log("차트 초기화 시작");
+    
+    // 기존 차트가 있으면 파괴
+    if (chart) {
+        chart.destroy();
+    }
+    
+    // Chart.js 플러그인 등록
+    Chart.register(ChartDataLabels);
+    
+    // 캔버스 요소 확인
+    const canvas = document.getElementById('dart-chart');
+    if (!canvas) {
+        console.error("차트 캔버스 요소를 찾을 수 없습니다.");
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    
+    // 차트 생성
+    chart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
+            datasets: [{
+                data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
+                backgroundColor: generateColors({{ participants|length }})
+            }]
+        },
+        options: {
+            rotation: -Math.PI / 2, // 시작 위치를 12시 방향(270도)으로 설정
+            animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { enabled: false },
+                datalabels: {
+                    color: '#000',
+                    formatter: function(value, context) {
+                        return context.chart.data.labels[context.dataIndex];
                     },
-                    cutout: '40%', // 원의 중앙 구멍 크기 축소 (더 넓은 세그먼트)
-                    radius: '100%' // 도넛 차트 최대 크기
+                    font: { 
+                        size: 14,
+                        weight: 'bold'
+                    },
+                    align: 'center',
+                    anchor: 'center',
+                    clamp: true,
+                    offset: 0,
+                    backgroundColor: function(context) {
+                        return hexToRgba(context.dataset.backgroundColor[context.dataIndex], 0.7);
+                    },
+                    borderRadius: 4,
+                    padding: 4,
+                    textAlign: 'center'
                 }
-            });
+            },
+            cutout: '40%',
+            radius: '100%'
         }
+    });
+    
+    console.log("차트 초기화 완료");
+}
 
         function generateColors(count) {
             const colors = [];
