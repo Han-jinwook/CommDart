@@ -198,42 +198,42 @@
         {% endif %}
     </div>
     <div id="controls">
-        {% if user.is_authenticated %}
-        <div id="time-controls">
-            <div class="time-control-item">
-                <span class="time-label">슈팅시간 설정:</span>
-                <input type="text" id="target-time" placeholder="HH:MM:SS" value="">
-                <button id="start-button" onclick="startRotation()">시작</button>
-            </div>
-            <div class="time-control-item">
-                <span class="time-label">남은시간:</span>
-                <span id="remaining-time" class="time-value">--:--:--</span>
-            </div>
-            <div class="time-control-item">
-                <span class="time-label">현재시간:</span>
-                <span id="current-time" class="time-value"></span>
-            </div>
+{% if user.is_authenticated %}
+<div id="time-controls">
+    <div class="time-control-item">
+        <span class="time-label">슈팅시간 설정:</span>
+        <input type="text" id="target-time" placeholder="HH:MM:SS" value="">
+        <button id="start-button" onclick="startRotation()">시작</button>
+    </div>
+    <div class="time-control-item">
+        <span class="time-label">남은시간:</span>
+        <span id="remaining-time" class="time-value">--:--:--</span>
+    </div>
+    <div class="time-control-item">
+        <span class="time-label">현재시간:</span>
+        <span id="current-time" class="time-value"></span>
+    </div>
+</div>
+{% else %}
+<!-- 게스트 모드용 시간 표시 -->
+<div id="time-controls" class="guest-mode">
+    <div style="text-align: center; font-weight: bold; margin-bottom: 10px;">게스트 모드로 관람 중입니다</div>
+    <div style="display: flex; justify-content: center; flex-wrap: wrap;">
+        <div class="time-control-item">
+            <span class="time-label">현재시간:</span>
+            <span id="current-time" class="time-value"></span>
         </div>
-        {% else %}
-        <!-- 게스트 모드용 시간 표시 -->
-        <div id="guest-time-controls">
-            <div style="text-align: center; font-weight: bold; margin-bottom: 10px;">게스트 모드로 관람 중입니다</div>
-            <div style="display: flex; justify-content: center; flex-wrap: wrap;">
-                <div class="time-control-item">
-                    <span class="time-label">현재시간:</span>
-                    <span id="current-time" class="time-value"></span>
-                </div>
-                <div class="time-control-item">
-                    <span class="time-label">남은시간:</span>
-                    <span id="remaining-time" class="time-value">--:--:--</span>
-                </div>
-                <div class="time-control-item">
-                    <span class="time-label">슈팅시간:</span>
-                    <span id="target-time-display" class="time-value">--:--:--</span>
-                </div>
-            </div>
+        <div class="time-control-item">
+            <span class="time-label">남은시간:</span>
+            <span id="remaining-time" class="time-value">--:--:--</span>
         </div>
-        {% endif %}
+        <div class="time-control-item">
+            <span class="time-label">슈팅시간:</span>
+            <span id="target-time-display" class="time-value">--:--:--</span>
+        </div>
+    </div>
+</div>
+{% endif %}
         
         <!-- 게임 레이아웃은 모든 사용자에게 표시 -->
         <div id="game-layout">
