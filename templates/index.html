@@ -221,15 +221,15 @@
     <div style="display: flex; justify-content: center; flex-wrap: wrap;">
         <div class="time-control-item">
             <span class="time-label">현재시간:</span>
-            <span id="current-time" class="time-value"></span>
+            <span id="guest-current-time" class="time-value"></span>
         </div>
         <div class="time-control-item">
             <span class="time-label">남은시간:</span>
-            <span id="remaining-time" class="time-value">--:--:--</span>
+            <span id="guest-remaining-time" class="time-value">--:--:--</span>
         </div>
         <div class="time-control-item">
             <span class="time-label">슈팅시간:</span>
-            <span id="target-time-display" class="time-value">--:--:--</span>
+            <span id="guest-target-time-display" class="time-value">--:--:--</span>
         </div>
     </div>
 </div>
@@ -506,60 +506,50 @@ function initChart() {
         }
 
         // 카운트다운 업데이트 함수
-        function updateCountdown() {
-            if (!targetDateTime) {
-                document.getElementById('remaining-time').innerText = '--:--:--';
-                return;
-            }
-            
-            const now = new Date();
-            const diff = targetDateTime - now;
-            
-            if (diff <= 0) {
-                document.getElementById('remaining-time').innerText = '00:00:00';
-                clearInterval(countdownInterval);
-                return;
-            }
-            
-            let seconds = Math.floor(diff / 1000);
-            let minutes = Math.floor(seconds / 60);
-            let hours = Math.floor(minutes / 60);
-            
-            seconds %= 60;
-            minutes %= 60;
-            
-            const formattedHours = hours.toString().padStart(2, '0');
-            const formattedMinutes = minutes.toString().padStart(2, '0');
-            const formattedSeconds = seconds.toString().padStart(2, '0');
-            
-            document.getElementById('remaining-time').innerText = 
-                `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+function updateCountdown() {
+    if (!targetDateTime) {
+        document.getElementById('remaining-time').innerText = '--:--:--';
+        const guestRemainingTime = document.getElementById('guest-remaining-time');
+        if (guestRemainingTime) {
+            guestRemainingTime.innerText = '--:--:--';
         }
-
-        // 현재 시간 업데이트 함수
-        function updateTime() {
-            const now = new Date();
-            const hours = now.getHours().toString().padStart(2, '0');
-            const minutes = now.getMinutes().toString().padStart(2, '0');
-            const seconds = now.getSeconds().toString().padStart(2, '0');
-            const timeString = `${hours}:${minutes}:${seconds}`;
-            
-            const currentTimeElements = document.querySelectorAll('#current-time');
-            currentTimeElements.forEach(element => {
-                if (element) {
-                    element.innerText = timeString;
-                }
-            });
-            
-            const targetTimeElement = document.getElementById('target-time');
-            if (targetTimeElement && !targetTimeElement.value) {
-                const laterDate = new Date(now.getTime() + 60000); // 현재 시간 + 1분
-                const laterHours = laterDate.getHours().toString().padStart(2, '0');
-                const laterMinutes = laterDate.getMinutes().toString().padStart(2, '0');
-                const laterSeconds = laterDate.getSeconds().toString().padStart(2, '0');
-                targetTimeElement.value = `${laterHours}:${laterMinutes}:${laterSeconds}`;
-            }
+        return;
+    }
+    
+    const now = new Date();
+    const diff = targetDateTime - now;
+    
+    if (diff <= 0) {
+        // 카운트다운 종료
+        document.getElementById('remaining-time').innerText = '00:00:00';
+        const guestRemainingTime = document.getElementById('guest-remaining-time');
+        if (guestRemainingTime) {
+            guestRemainingTime.innerText = '00:00:00';
         }
+        clearInterval(countdownInterval);
+        return;
+    }
+    
+    // 시, 분, 초 계산
+    let seconds = Math.floor(diff / 1000);
+    let minutes = Math.floor(seconds / 60);
+    let hours = Math.floor(minutes / 60);
+    
+    seconds %= 60;
+    minutes %= 60;
+    
+    // 표시 형식 포맷팅
+    const formattedHours = hours.toString().padStart(2, '0');
+    const formattedMinutes = minutes.toString().padStart(2, '0');
+    const formattedSeconds = seconds.toString().padStart(2, '0');
+    const timeString = `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+    
+    document.getElementById('remaining-time').innerText = timeString;
+    const guestRemainingTime = document.getElementById('guest-remaining-time');
+    if (guestRemainingTime) {
+        guestRemainingTime.innerText = timeString;
+    }
+}
 
         // 소리 직접 테스트
         function testSound() {
@@ -686,14 +676,14 @@ window.onload = function() {
         const finalAngle = data.finalAngle;
         const winner = data.winner;
         
-        const targetTimeDisplay = document.getElementById('target-time-display');
-        if (targetTimeDisplay) {
-            const targetDate = new Date(Date.now() + duration * 1000);
-            const hours = targetDate.getHours().toString().padStart(2, '0');
-            const minutes = targetDate.getMinutes().toString().padStart(2, '0');
-            const seconds = targetDate.getSeconds().toString().padStart(2, '0');
-            targetTimeDisplay.innerText = `${hours}:${minutes}:${seconds}`;
-        }
+const targetTimeDisplay = document.getElementById('target-time-display');
+if (targetTimeDisplay) {
+    targetTimeDisplay.innerText = `${hours}:${minutes}:${seconds}`;
+}
+const guestTargetTimeDisplay = document.getElementById('guest-target-time-display');
+if (guestTargetTimeDisplay) {
+    guestTargetTimeDisplay.innerText = `${hours}:${minutes}:${seconds}`;
+}
         
         const adjustedFinalAngle = finalAngle + 2;
         
