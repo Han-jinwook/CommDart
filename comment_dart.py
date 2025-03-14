@@ -84,6 +84,14 @@ def logout():
         logout_user()
     return redirect(url_for('index'))
 
+@app.route('/guest')
+def guest_view():
+    return render_template('index.html',
+                          participants=participants,
+                          colors=colors,
+                          user=None,
+                          is_guest=True)
+    
 # ----- 참가자 로딩 함수 (가나다순 정렬 추가) -----
 def load_participants(filename="participants.txt"):
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
