@@ -141,7 +141,8 @@ def index():
     return render_template('index.html',
                            participants=participants,
                            colors=colors,
-                           user=current_user)
+                           user=current_user,
+                           is_admin=current_user.is_authenticated)  # 로그인 상태를 is_admin 변수로 전달
 
 # ----- 회전 게임 로직 -----
 games = {}
