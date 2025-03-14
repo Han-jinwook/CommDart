@@ -216,6 +216,7 @@
 </div>
 {% else %}
 <!-- 게스트 모드용 시간 표시 -->
+<!-- 게스트 모드용 시간 표시 -->
 <div id="time-controls" class="guest-mode">
     <div style="text-align: center; font-weight: bold; margin-bottom: 10px;">게스트 모드로 관람 중입니다</div>
     <div style="display: flex; justify-content: center; flex-wrap: wrap;">
@@ -632,22 +633,32 @@ window.onload = function() {
     }
     
     // 시간 업데이트 함수 정의
-    function updateTime() {
-        const now = new Date();
-        const hours = now.getHours().toString().padStart(2, '0');
-        const minutes = now.getMinutes().toString().padStart(2, '0');
-        const seconds = now.getSeconds().toString().padStart(2, '0');
-        const timeString = `${hours}:${minutes}:${seconds}`;
-        
-        // 현재 시간 업데이트
-        document.getElementById('current-time').innerText = timeString;
-        
-        // 게스트 모드인 경우 게스트용 시간 표시도 업데이트
-        const guestCurrentTime = document.getElementById('guest-current-time');
-        if (guestCurrentTime) {
-            guestCurrentTime.innerText = timeString;
-        }
+function updateTime() {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const seconds = now.getSeconds().toString().padStart(2, '0');
+    const timeString = `${hours}:${minutes}:${seconds}`;
+    
+    // 관리자 모드 시간 업데이트
+    document.getElementById('current-time').innerText = timeString;
+    
+    // 게스트 모드 시간 업데이트
+    const guestCurrentTime = document.getElementById('guest-current-time');
+    if (guestCurrentTime) {
+        guestCurrentTime.innerText = timeString;
     }
+    
+    // 관리자 모드에서만 표시
+    const targetTimeElement = document.getElementById('target-time');
+    if (targetTimeElement && !targetTimeElement.value) {
+        const laterDate = new Date(now.getTime() + 60000); // 현재 시간 + 1분
+        const laterHours = laterDate.getHours().toString().padStart(2, '0');
+        const laterMinutes = laterDate.getMinutes().toString().padStart(2, '0');
+        const laterSeconds = laterDate.getSeconds().toString().padStart(2, '0');
+        targetTimeElement.value = `${laterHours}:${laterMinutes}:${laterSeconds}`;
+    }
+}
     
     // 초기 시간 업데이트
     updateTime();
@@ -705,14 +716,14 @@ window.onload = function() {
         const targetTimeString = `${targetHours}:${targetMinutes}:${targetSeconds}`;
 
         // 타겟 시간 표시 업데이트
-        const targetTimeDisplay = document.getElementById('target-time-display');
-        if (targetTimeDisplay) {
-            targetTimeDisplay.innerText = targetTimeString;
-        }
-        const guestTargetTimeDisplay = document.getElementById('guest-target-time-display');
-        if (guestTargetTimeDisplay) {
-            guestTargetTimeDisplay.innerText = targetTimeString;
-        }
+const targetTimeDisplay = document.getElementById('target-time-display');
+if (targetTimeDisplay) {
+    targetTimeDisplay.innerText = `${hours}:${minutes}:${seconds}`;
+}
+const guestTargetTimeDisplay = document.getElementById('guest-target-time-display');
+if (guestTargetTimeDisplay) {
+    guestTargetTimeDisplay.innerText = `${hours}:${minutes}:${seconds}`;
+}
         
         const adjustedFinalAngle = finalAngle + 2;
         
