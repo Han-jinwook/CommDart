@@ -703,11 +703,65 @@ socket.on('start_game', function(data) {
             document.getElementById('start-button').disabled = false;
         });
 
-        // 비프음 재생 이벤트 처리
-        socket.on('play_beep', function() {
-            console.log("비프음 재생 요청 수신");
-            startBeepLoop(); // 비프음 반복 재생 시작
+// 비프음 재생 함수
+function startBeepLoop() {
+    // 기존 비프음 정리
+    stopBeepLoop();
+    
+    console.log("비프음 재생 시작");
+    
+    // 단일 오디오 객체 생성
+    beepAudio = new Audio(beepSound);
+    beepAudio.loop = true; // 반복 재생 설정
+    beepAudio.play().catch(err => console.error("비프음 재생 실패:", err));
+}
+
+// 비프음 중지 함수
+function stopBeepLoop() {
+    if (beepAudio) {
+        try {
+            beepAudio.pause();
+            beepAudio.currentTime = 0;
+            beepAudio.src = ''; // src 비우기
+            beepAudio = null;
+        } catch(e) {
+            console.error("비프음 중지 중 오류:", e);
+        }
+        console.log("비프음 중지됨");
+    }
+    
+    // 인터벌 제거 (사용 중이었다면)
+    if (beepLoopInterval) {
+        clearInterval(beepLoopInterval);
+        beepLoopInterval = null;
+    }
+    
+    // 모든 오디오 요소 검사 및 중지
+    try {
+        const allAudios = document.querySelectorAll('audio');
+        allAudios.forEach(audio => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.src = '';
         });
+    } catch(e) {
+        console.error("오디오 요소 중지 중 오류:", e);
+    }
+}
+
+// 비프음 재생 이벤트 처리
+socket.on('play_beep', function() {
+    console.log("비프음 재생 요청 수신");
+    
+    // 입력창 포커스 체크 추가
+    const targetTimeInput = document.getElementById('target-time');
+    if (targetTimeInput && document.activeElement === targetTimeInput) {
+        console.log("입력창 포커스 상태: 비프음 재생 건너뜀");
+        return;
+    }
+    
+    startBeepLoop(); // 비프음 반복 재생 시작
+});
  // 게임 리셋 이벤트 처리
         socket.on('game_reset_complete', function() {
             console.log("게임 리셋 완료");
@@ -857,6 +911,19 @@ window.onload = function() {
         targetTimeInput.addEventListener('click', function(e) {
             // 비프음 재생 방지
             e.stopPropagation();
+            // 입력창 관련 이벤트 처리 개선
+const targetTimeInput = document.getElementById('target-time');
+if (targetTimeInput) {
+    // 입력창에 여러 이벤트 리스너 추가
+    ['mousedown', 'mouseup', 'focus', 'click', 'touchstart'].forEach(function(eventName) {
+        targetTimeInput.addEventListener(eventName, function(e) {
+            // 모든 이벤트에서 비프음 중지
+            stopBeepLoop();
+            // 이벤트 전파 중단
+            e.stopPropagation();
+        });
+    });
+}
         });
     }
     
