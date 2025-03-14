@@ -180,6 +180,13 @@
             align-items: center;
             width: 100%;
         }
+        /* 게스트 모드 스타일 */
+        #guest-time-controls {
+            padding: 10px;
+            background-color: #e9e9e9;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
     </style>
     <link rel="icon" href="data:,">
 </head>
@@ -190,786 +197,551 @@
             <a href="{{ url_for('logout') }}" id="logout">로그아웃</a>
         {% endif %}
     </div>
-
- <div id="controls">
-    {% if user.is_authenticated %}
-    <div id="time-controls">
-        <!-- time-controls 내용은 그대로 유지 -->
-    </div>
-    {% else %}
-    <!-- 게스트 모드용 시간 표시 -->
-    <div id="guest-time-controls" style="padding: 10px; background-color: #e9e9e9; border-radius: 5px; margin: 10px 0;">
-        <div style="text-align: center; font-weight: bold; margin-bottom: 10px;">게스트 모드로 관람 중입니다</div>
-        <div style="display: flex; justify-content: center; flex-wrap: wrap;">
+    <div id="controls">
+        {% if user.is_authenticated %}
+        <div id="time-controls">
             <div class="time-control-item">
-                <span class="time-label">현재시간:</span>
-                <span id="current-time" class="time-value"></span>
+                <span class="time-label">슈팅시간 설정:</span>
+                <input type="text" id="target-time" placeholder="HH:MM:SS" value="">
+                <button id="start-button" onclick="startRotation()">시작</button>
             </div>
             <div class="time-control-item">
                 <span class="time-label">남은시간:</span>
                 <span id="remaining-time" class="time-value">--:--:--</span>
             </div>
             <div class="time-control-item">
-                <span class="time-label">슈팅시간:</span>
-                <span id="target-time-display" class="time-value">--:--:--</span>
+                <span class="time-label">현재시간:</span>
+                <span id="current-time" class="time-value"></span>
             </div>
         </div>
-    </div>
-    
-    <!-- 게임 레이아웃은 모든 사용자에게 표시 -->
-    <div id="game-layout">
-        <div id="main-container">
-            <div id="chart-container">
-                <!-- 화살표는 12시 방향에 고정 -->
-                <div id="pointer"></div>
-                <div id="rotating-container">
-                    <canvas id="dart-chart"></canvas>
+        {% else %}
+        <!-- 게스트 모드용 시간 표시 -->
+        <div id="guest-time-controls">
+            <div style="text-align: center; font-weight: bold; margin-bottom: 10px;">게스트 모드로 관람 중입니다</div>
+            <div style="display: flex; justify-content: center; flex-wrap: wrap;">
+                <div class="time-control-item">
+                    <span class="time-label">현재시간:</span>
+                    <span id="current-time" class="time-value"></span>
                 </div>
-            </div>
-            <div id="legend-container">
-                <div class="legend-item">
-                    <span class="legend-color" style="background-color: transparent;"></span>
-                    <strong>별명 / 댓글수</strong>
+                <div class="time-control-item">
+                    <span class="time-label">남은시간:</span>
+                    <span id="remaining-time" class="time-value">--:--:--</span>
                 </div>
-                {% for p in participants %}
-                    <div class="legend-item">
-                        <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
-                        {{ p[0] }} / {{ p[1] }}
-                    </div>
-                {% endfor %}
+                <div class="time-control-item">
+                    <span class="time-label">슈팅시간:</span>
+                    <span id="target-time-display" class="time-value">--:--:--</span>
+                </div>
             </div>
         </div>
+        {% endif %}
         
-        <div id="result-container">
-            <h2 id="winner"></h2>
-            <div id="congratulation">썬드림 이벤트 당첨을 축하드립니다!! 🎉</div>
+        <!-- 게임 레이아웃은 모든 사용자에게 표시 -->
+        <div id="game-layout">
+            <div id="main-container">
+                <div id="chart-container">
+                    <!-- 화살표는 12시 방향에 고정 -->
+                    <div id="pointer"></div>
+                    <div id="rotating-container">
+                        <canvas id="dart-chart"></canvas>
+                    </div>
+                </div>
+                <div id="legend-container">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: transparent;"></span>
+                        <strong>별명 / 댓글수</strong>
+                    </div>
+                    {% for p in participants %}
+                        <div class="legend-item">
+                            <span class="legend-color" style="background-color: {{ colors[loop.index0] }};"></span>
+                            {{ p[0] }} / {{ p[1] }}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div id="result-container">
+                <h2 id="winner"></h2>
+                <div id="congratulation">썬드림 이벤트 당첨을 축하드립니다!! 🎉</div>
+            </div>
         </div>
     </div>
-</div>
 
     <!-- Chart.js + DataLabels 플러그인 + Socket.IO 클라이언트 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
     <script>
-  const socket = io();
-let chart;
-let countdownInterval = null;
-let targetDateTime = null;
+        const socket = io();
+        let chart;
+        let countdownInterval = null;
+        let targetDateTime = null;
+        
+        // 오디오 관련 변수
+        let beepSound = null;
+        let fanfareSound = null;
+        let beepLoopInterval = null;
+        let beepAudio = null; // 비프음 오디오 객체
 
-// 오디오 관련 변수
-let beepSound = null;
-let fanfareSound = null;
-let beepLoopInterval = null;
-let beepAudio = null; // 비프음 오디오 객체
-
-// 색상 변환 도우미 함수
-function hexToRgba(hex, alpha) {
-    // 기본 색상이 HSL 형식인 경우 흰색 배경 반환
-    if (hex.startsWith('hsl')) {
-        return `rgba(255, 255, 255, ${alpha})`;
-    }
-    
-    // HEX 색상 변환
-    try {
-        let r = parseInt(hex.slice(1, 3), 16);
-        let g = parseInt(hex.slice(3, 5), 16);
-        let b = parseInt(hex.slice(5, 7), 16);
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    } catch (e) {
-        return `rgba(255, 255, 255, ${alpha})`;
-    }
-}
-
-function initChart() {
-    Chart.register(ChartDataLabels);
-    const ctx = document.getElementById('dart-chart').getContext('2d');
-    chart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
-            datasets: [{
-                data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
-                backgroundColor: generateColors({{ participants|length }})
-            }]
-        },
-        options: {
-            rotation: -Math.PI / 2, // 시작 위치를 12시 방향(270도)으로 설정
-            animation: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: { enabled: false },
-                datalabels: {
-                    color: '#000',
-                    formatter: function(value, context) {
-                        return context.chart.data.labels[context.dataIndex];
-                    },
-                    font: { 
-                        size: 14,
-                        weight: 'bold'
-                    },
-                    // 레이블 위치 및 정렬 개선
-                    align: 'center',
-                    anchor: 'center',
-                    // 텍스트 밖으로 넘치지 않도록 줄바꿈 설정
-                    clamp: true,
-                    // 원 안쪽으로 텍스트 위치 조정
-                    offset: 0,
-                    // 텍스트에 배경색 추가하여 가독성 향상
-                    backgroundColor: function(context) {
-                        return hexToRgba(context.dataset.backgroundColor[context.dataIndex], 0.7);
-                    },
-                    borderRadius: 4,
-                    padding: 4,
-                    // 줄바꿈 - 긴 텍스트 처리
-                    textAlign: 'center'
-                }
-            },
-            cutout: '40%', // 원의 중앙 구멍 크기 축소 (더 넓은 세그먼트)
-            radius: '100%' // 도넛 차트 최대 크기
-        }
-    });
-}
-
-function generateColors(count) {
-    const colors = [];
-    for (let i = 0; i < count; i++) {
-        colors.push(`hsl(${i * 360 / count}, 70%, 50%)`);
-    }
-    return colors;
-}
-
-// 오디오 파일 로딩 및 준비
-function loadSounds() {
-    console.log("오디오 파일 로딩 시도");
-    
-    // 오디오 파일 경로 설정 (기본값)
-    beepSound = '/static/beep.mp3';
-    fanfareSound = '/static/fanfare.mp3';
-    
-    // 테스트 코드 추가
-    console.log("소리 파일 설정 완료:", {
-        비프음: beepSound,
-        팡파레: fanfareSound
-    });
-    
-    // 오디오 프리로딩
-    const preloadAudio = (src) => {
-        return new Promise((resolve, reject) => {
+        // 색상 변환 도우미 함수
+        function hexToRgba(hex, alpha) {
+            // 기본 색상이 HSL 형식인 경우 흰색 배경 반환
+            if (hex.startsWith('hsl')) {
+                return `rgba(255, 255, 255, ${alpha})`;
+            }
+            
+            // HEX 색상 변환
             try {
-                const audio = new Audio();
-                audio.preload = 'auto';
-                
-                audio.addEventListener('canplaythrough', () => {
-                    console.log(`오디오 파일 로드 성공: ${src}`);
-                    resolve(true);
-                }, { once: true });
-                
-                audio.addEventListener('error', (e) => {
-                    console.error(`오디오 파일 로드 실패: ${src}`, e);
-                    reject(e);
-                }, { once: true });
-                
-                audio.src = src;
-                audio.load();
+                let r = parseInt(hex.slice(1, 3), 16);
+                let g = parseInt(hex.slice(3, 5), 16);
+                let b = parseInt(hex.slice(5, 7), 16);
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
             } catch (e) {
-                console.error(`오디오 프리로딩 오류: ${src}`, e);
-                reject(e);
-            }
-        });
-    };
-    
-    // 비동기로 오디오 프리로딩
-    Promise.allSettled([
-        preloadAudio(beepSound),
-        preloadAudio(fanfareSound)
-    ]).then(results => {
-        console.log("오디오 파일 프리로딩 완료:", results);
-    });
-}
-
-// 비프음 재생 함수
-function startBeepLoop() {
-    // 이전 비프음 정리
-    stopBeepLoop();
-    
-    console.log("비프음 재생 시작");
-    
-    // 입력창 포커스 확인
-    const targetTimeInput = document.getElementById('target-time');
-    if (targetTimeInput && document.activeElement === targetTimeInput) {
-        console.log("입력창 포커스 상태: 비프음 재생 건너뜀");
-        return;
-    }
-    
-    try {
-        // 새 오디오 객체 생성
-        beepAudio = new Audio(beepSound);
-        beepAudio.loop = true;
-        beepAudio.play().catch(err => {
-            console.error("비프음 재생 실패:", err);
-        });
-    } catch (e) {
-        console.error("비프음 시작 중 오류:", e);
-    }
-}
-
-// 비프음 중지 함수
-function stopBeepLoop() {
-    console.log("비프음 중지 시도");
-    
-    // 오디오 객체 중지
-    if (beepAudio) {
-        try {
-            beepAudio.pause();
-            beepAudio.currentTime = 0;
-            beepAudio.src = '';
-            beepAudio.load(); // 명시적 언로드
-            beepAudio = null;
-        } catch(e) {
-            console.error("비프음 중지 중 오류:", e);
-        }
-    }
-    
-    // 전역 window.beepAudio 객체도 확인
-    if (window.beepAudio) {
-        try {
-            window.beepAudio.pause();
-            window.beepAudio.currentTime = 0;
-            window.beepAudio.src = '';
-            window.beepAudio.load();
-            window.beepAudio = null;
-        } catch(e) {
-            console.error("window.beepAudio 중지 중 오류:", e);
-        }
-    }
-    
-    // 인터벌 제거
-    if (beepLoopInterval) {
-        clearInterval(beepLoopInterval);
-        beepLoopInterval = null;
-    }
-    
-    // 모든 오디오 요소 강제 중지
-    try {
-        document.querySelectorAll('audio').forEach(function(audio) {
-            try {
-                audio.pause();
-                audio.currentTime = 0;
-                audio.src = '';
-                audio.load();
-            } catch(e) {
-                console.error("오디오 요소 중지 중 오류:", e);
-            }
-        });
-    } catch(e) {
-        console.error("오디오 요소 중지 중 오류:", e);
-    }
-    
-    console.log("비프음 중지 완료");
-}
-
-// 모든 소리 중지 함수 (별도 함수로 분리)
-function stopAllSounds() {
-    stopBeepLoop();
-}
-
-// 팡파레 재생 - 개선된 버전
-function playFanfare() {
-    console.log("팡파레 재생, 소리 파일:", fanfareSound);
-    
-    try {
-        const audio = new Audio(fanfareSound);
-        audio.volume = 0.8; // 볼륨 약간 낮춤
-        audio.play()
-            .then(() => console.log("팡파레 재생 성공"))
-            .catch(err => console.error("팡파레 재생 실패:", err));
-    } catch (e) {
-        console.error("팡파레 재생 중 오류:", e);
-    }
-}
-
-// 카운트다운 함수
-function startCountdown(durationInSeconds) {
-    // 이전 카운트다운이 있으면 정리
-    if (countdownInterval) {
-        clearInterval(countdownInterval);
-    }
-    
-    // 목표 시간 설정
-    const now = new Date();
-    targetDateTime = new Date(now.getTime() + durationInSeconds * 1000);
-    
-    // 즉시 한 번 업데이트
-    updateCountdown();
-    
-    // 1초마다 카운트다운 업데이트
-    countdownInterval = setInterval(updateCountdown, 1000);
-}
-
-// 카운트다운 업데이트 함수
-function updateCountdown() {
-    if (!targetDateTime) {
-        document.getElementById('remaining-time').innerText = '--:--:--';
-        return;
-    }
-    
-    const now = new Date();
-    const diff = targetDateTime - now;
-    
-    if (diff <= 0) {
-        // 카운트다운 종료
-        document.getElementById('remaining-time').innerText = '00:00:00';
-        clearInterval(countdownInterval);
-        return;
-    }
-    
-    // 시, 분, 초 계산
-    let seconds = Math.floor(diff / 1000);
-    let minutes = Math.floor(seconds / 60);
-    let hours = Math.floor(minutes / 60);
-    
-    seconds %= 60;
-    minutes %= 60;
-    
-    // 표시 형식 포맷팅
-    const formattedHours = hours.toString().padStart(2, '0');
-    const formattedMinutes = minutes.toString().padStart(2, '0');
-    const formattedSeconds = seconds.toString().padStart(2, '0');
-    
-    document.getElementById('remaining-time').innerText = 
-        `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
-}
-
-// 현재 시간 업데이트 함수
-function updateTime() {
-    const now = new Date();
-    const hours = now.getHours().toString().padStart(2, '0');
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    const seconds = now.getSeconds().toString().padStart(2, '0');
-    const timeString = `${hours}:${minutes}:${seconds}`;
-    
-    // 현재 시간 표시
-    const currentTimeElement = document.getElementById('current-time');
-    if (currentTimeElement) {
-        currentTimeElement.innerText = timeString;
-    }
-    
-    // 처음 로드될 때만 target-time 입력 필드에 현재 시간 + 1분을 기본값으로 설정
-    const targetTimeElement = document.getElementById('target-time');
-    if (targetTimeElement && !targetTimeElement.value) {
-        const laterDate = new Date(now.getTime() + 60000); // 현재 시간 + 1분
-        const laterHours = laterDate.getHours().toString().padStart(2, '0');
-        const laterMinutes = laterDate.getMinutes().toString().padStart(2, '0');
-        const laterSeconds = laterDate.getSeconds().toString().padStart(2, '0');
-        targetTimeElement.value = `${laterHours}:${laterMinutes}:${laterSeconds}`;
-    }
-}
-
-// 소리 직접 테스트
-function testSound() {
-    try {
-        const beep = new Audio('/static/beep.mp3');
-        beep.volume = 0.8; // 볼륨 약간 낮춤
-        beep.play().then(() => {
-            console.log("사용자 상호작용으로 비프음 테스트 성공");
-        }).catch(err => {
-            console.error("비프음 테스트 실패:", err);
-        });
-    } catch(e) {
-        console.error("소리 테스트 중 오류:", e);
-    }
-}
-
-// 시작 버튼 클릭 함수
-function startRotation() {
-    console.log('시작 버튼 클릭됨');
-    document.getElementById('start-button').disabled = true;
-    
-    // 먼저 비프음 중지
-    stopAllSounds();
-    
-    const timeInput = document.getElementById('target-time').value;
-    if (!timeInput) {
-        alert('시간을 입력해주세요.');
-        document.getElementById('start-button').disabled = false;
-        return;
-    }
-    
-    // 시:분:초 형식 검증
-    const timePattern = /^([0-1][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/;
-    if (!timePattern.test(timeInput)) {
-        alert('시간 형식은 HH:MM:SS여야 합니다. (예: 15:30:00)');
-        document.getElementById('start-button').disabled = false;
-        return;
-    }
-    
-    // 입력창에서 포커스 제거
-    document.getElementById('target-time').blur();
-    
-    // 소리 테스트 (브라우저 권한 획득)
-    testSound();
-    
-    // 로컬 시간을 UTC로 변환
-    const [localH, localM, localS] = timeInput.split(':').map(Number);
-    const localDate = new Date();
-    localDate.setHours(localH, localM, localS, 0);
-    const utcMs = localDate.getTime();
-    const utcDate = new Date(utcMs);
-    const utcHours = utcDate.getUTCHours().toString().padStart(2, '0');
-    const utcMins = utcDate.getUTCMinutes().toString().padStart(2, '0');
-    const utcSecs = utcDate.getUTCSeconds().toString().padStart(2, '0');
-    const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
-    
-    console.log('Emitting start_rotation with UTC time:', formattedTime);
-    socket.emit('start_rotation', { time: formattedTime });
-}
-
-// 페이지 로드 완료 시 실행 함수
-window.onload = function() {
-    console.log("페이지 로드 완료");
-    
-    // 모든 소리 정지
-    stopAllSounds();
-    
-    // 오디오 파일 로드
-    loadSounds();
-    
-    // 차트 초기화
-    try {
-        initChart();
-        console.log("차트 초기화 성공");
-    } catch(e) {
-        console.error("차트 초기화 오류:", e);
-    }
-    
-    // 시간 업데이트 즉시 실행
-    updateTime();
-    
-    // 1초마다 시간 업데이트
-    setInterval(updateTime, 1000);
-    console.log("시간 업데이트 타이머 설정 완료");
-    
-    // 시작 버튼에만 클릭 리스너 추가
-    document.getElementById('start-button').addEventListener('click', function() {
-        stopBeepLoop(); // 클릭 시 비프음 중지
-    });
-    
-    // 입력창 관련 이벤트 처리 개선
-    const targetTimeInput = document.getElementById('target-time');
-    if (targetTimeInput) {
-        // 입력창에 여러 이벤트 리스너 추가
-        ['mousedown', 'mouseup', 'focus', 'focusin', 'click', 'touchstart'].forEach(function(eventName) {
-            targetTimeInput.addEventListener(eventName, function(e) {
-                // 모든 이벤트에서 비프음 중지
-                stopBeepLoop();
-                // 이벤트 전파 중단
-                e.stopPropagation();
-                console.log(`입력창 ${eventName} 이벤트: 비프음 중지됨`);
-            });
-        });
-        
-        // 키보드 이벤트도 처리
-        targetTimeInput.addEventListener('keydown', function(e) {
-            stopBeepLoop();
-        });
-    }
-    
-    // 소켓 연결 상태 확인
-    socket.on('connect', function() {
-        console.log('서버에 연결되었습니다.');
-    });
-    
-    socket.on('disconnect', function() {
-        console.log('서버와 연결이 끊어졌습니다.');
-    });
-    
-    // 비프음 재생 이벤트 처리 - 완전 재작성
-    socket.on('play_beep', function() {
-        console.log("비프음 재생 요청 수신");
-        
-        // 입력창이 현재 활성화되어 있는지 확인
-        const targetTimeInput = document.getElementById('target-time');
-        const isInputFocused = document.activeElement === targetTimeInput;
-        
-        if (isInputFocused) {
-            console.log("입력창 포커스 상태: 비프음 재생 건너뜀");
-            return; // 입력창에 포커스가 있으면 비프음 재생 건너뜀
-        }
-        
-        // 이전 오디오 객체 제거
-        if (window.beepAudio) {
-            try {
-                window.beepAudio.pause();
-                window.beepAudio = null;
-            } catch(e) {}
-        }
-        
-        // 완전히 새로운 오디오 객체 생성
-        try {
-            window.beepAudio = new Audio(beepSound);
-            window.beepAudio.loop = true;
-            window.beepAudio.play().catch(err => {
-                console.error("비프음 재생 실패:", err);
-            });
-        } catch(e) {
-            console.error("오디오 객체 생성 오류:", e);
-        }
-    });
-    
-    // 당첨자 업데이트 이벤트 처리
-    socket.on('update_winner', function(data) {
-        // 소리 정지
-        stopAllSounds();
-        
-        document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
-        document.getElementById('start-button').disabled = false;
-        
-        // 디버깅 정보 출력
-        if (window.animationInfo) {
-            const totalTime = (Date.now() - window.animationInfo.startTime) / 1000;
-            console.log('게임 종료 정보:', {
-                예상시간: (window.animationInfo.duration) + '초',
-                실제경과시간: totalTime.toFixed(2) + '초',
-                수신된당첨자: data.winner,
-                서버예상당첨자: window.animationInfo.winner
-            });
-            
-            // 당첨자 불일치 확인
-            if (data.winner !== window.animationInfo.winner) {
-                console.error('당첨자 불일치 발생!', {
-                    서버예상: window.animationInfo.winner,
-                    실제수신: data.winner
-                });
+                return `rgba(255, 255, 255, ${alpha})`;
             }
         }
-        
-        // 축하 메시지 표시
-        const congratulation = document.getElementById('congratulation');
-        congratulation.style.display = 'block';
-        congratulation.classList.add('blink');
-        
-        // 깜박임 효과 3초 후 제거
-        setTimeout(() => {
-            congratulation.classList.remove('blink');
-        }, 3000);
-        
-        // 카운트다운 정리
-        if (countdownInterval) {
-            clearInterval(countdownInterval);
-            document.getElementById('remaining-time').innerText = '00:00:00';
-        }
-    });
-    
-    // 팡파레 재생 이벤트 처리
-    socket.on('play_fanfare', function() {
-        console.log("팡파레 재생 요청 수신");
-        
-        // 모든 오디오 요소 찾아서 강제 중지
-        const allAudioElements = document.querySelectorAll('audio');
-        allAudioElements.forEach(audio => {
-            try {
-                audio.pause();
-                audio.currentTime = 0;
-            } catch(e) {
-                console.error("오디오 중지 중 오류:", e);
-            }
-        });
-        
-        // 비프음 루프 중지
-        stopBeepLoop();
-        
-        // 약간 지연 후 팡파레 재생
-        setTimeout(() => {
-            playFanfare();
-        }, 100);
-    });
-    
-    // 에러 이벤트 처리
-    socket.on('error', function(data) {
-        // 소리 정지
-        stopAllSounds();
-        
-        alert(data.message);
-        document.getElementById('start-button').disabled = false;
-    });
-    
-    // 게임 시작 이벤트 처리
-    socket.on('start_game', function(data) {
-        console.log('게임 시작:', data);
-        document.getElementById('start-button').disabled = true;
-        
-        // 서버에서 받은 게임 정보
-        const duration = data.duration;
-        const finalAngle = data.finalAngle;
-        const winner = data.winner;
 
-        // 게스트 모드에서 슈팅시간 표시 업데이트
-    const targetTimeDisplay = document.getElementById('target-time-display');
-    if (targetTimeDisplay) {
-        // 현재 시간 + 슈팅 지속 시간으로 슈팅시간 계산
-        const targetDate = new Date(Date.now() + duration * 1000);
-        const hours = targetDate.getHours().toString().padStart(2, '0');
-        const minutes = targetDate.getMinutes().toString().padStart(2, '0');
-        const seconds = targetDate.getSeconds().toString().padStart(2, '0');
-        targetTimeDisplay.innerText = `${hours}:${minutes}:${seconds}`;
-    }
-        
-        // 매우 중요: 원판 회전 방향을 고려한 화살표 위치 보정
-        // 서버의 당첨자 계산과 일치하도록 finalAngle을 조정
-        const adjustedFinalAngle = finalAngle + 2; // 각도 조정 값은 테스트 필요
-        
-        console.log('받은 회전 정보:', {
-            duration: duration + '초',
-            finalAngle: finalAngle + '도',
-            adjustedAngle: adjustedFinalAngle + '도',
-            winner: winner
-        });
-        
-        // 축하 메시지 숨기기
-        document.getElementById('congratulation').style.display = 'none';
-        document.getElementById('winner').innerText = '';
-        
-        // 카운트다운 시작
-        startCountdown(duration);
-        
-        // 애니메이션 시작 시간과 정보 저장
-        const startTime = Date.now();
-        const totalDuration = duration * 1000;
-        const endTime = startTime + totalDuration;
-        
-        // 애니메이션 정보 저장 (디버깅용)
-        window.animationInfo = {
-            duration,
-            finalAngle,
-            adjustedFinalAngle, // 조정된 각도도 저장
-            winner,
-            startTime,
-            endTime
-        };
-        
-        let animationFrameId = null;
-        let animationCompleted = false; // 애니메이션 완료 상태 추적
-        
-        // 애니메이션 함수
-        function animate() {
-            const now = Date.now();
-            const elapsed = now - startTime;
-            
-            // 애니메이션이 완료되었는지 확인
-            if (elapsed >= totalDuration) {
-                if (!animationCompleted) {
-                    animationCompleted = true;
-                    
-                    // 조정된 각도로 최종 위치 설정
-                    document.getElementById('rotating-container').style.transform = 
-                        `rotate(${adjustedFinalAngle}deg)`;
-                    
-                    console.log('애니메이션 완료:', {
-                        adjustedFinalAngle: adjustedFinalAngle + '도',
-                        elapsedTime: (elapsed / 1000).toFixed(2) + '초'
-                    });
-                    
-                    // 비프음 중지
-                    stopBeepLoop();
-                    
-                    // 원판 멈춤과 당첨자 선택 동시에 처리 (지연 없음)
-                    socket.emit('confirm_winner');
+        function initChart() {
+            Chart.register(ChartDataLabels);
+            const ctx = document.getElementById('dart-chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
+                    datasets: [{
+                        data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
+                        backgroundColor: generateColors({{ participants|length }})
+                    }]
+                },
+                options: {
+                    rotation: -Math.PI / 2, // 시작 위치를 12시 방향(270도)으로 설정
+                    animation: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false },
+                        datalabels: {
+                            color: '#000',
+                            formatter: function(value, context) {
+                                return context.chart.data.labels[context.dataIndex];
+                            },
+                            font: { 
+                                size: 14,
+                                weight: 'bold'
+                            },
+                            // 레이블 위치 및 정렬 개선
+                            align: 'center',
+                            anchor: 'center',
+                            // 텍스트 밖으로 넘치지 않도록 줄바꿈 설정
+                            clamp: true,
+                            // 원 안쪽으로 텍스트 위치 조정
+                            offset: 0,
+                            // 텍스트에 배경색 추가하여 가독성 향상
+                            backgroundColor: function(context) {
+                                return hexToRgba(context.dataset.backgroundColor[context.dataIndex], 0.7);
+                            },
+                            borderRadius: 4,
+                            padding: 4,
+                            // 줄바꿈 - 긴 텍스트 처리
+                            textAlign: 'center'
+                        }
+                    },
+                    cutout: '40%', // 원의 중앙 구멍 크기 축소 (더 넓은 세그먼트)
+                    radius: '100%' // 도넛 차트 최대 크기
                 }
+            });
+        }
+
+        function generateColors(count) {
+            const colors = [];
+            for (let i = 0; i < count; i++) {
+                colors.push(`hsl(${i * 360 / count}, 70%, 50%)`);
+            }
+            return colors;
+        }
+        
+        // 오디오 파일 로딩 및 준비
+        function loadSounds() {
+            console.log("오디오 파일 로딩 시도");
+            
+            // 오디오 파일 경로 설정 (기본값)
+            beepSound = '/static/beep.mp3';
+            fanfareSound = '/static/fanfare.mp3';
+            
+            // 테스트 코드 추가
+            console.log("소리 파일 설정 완료:", {
+                비프음: beepSound,
+                팡파레: fanfareSound
+            });
+            
+            // 오디오 프리로딩
+            const preloadAudio = (src) => {
+                return new Promise((resolve, reject) => {
+                    try {
+                        const audio = new Audio();
+                        audio.preload = 'auto';
+                        
+                        audio.addEventListener('canplaythrough', () => {
+                            console.log(`오디오 파일 로드 성공: ${src}`);
+                            resolve(true);
+                        }, { once: true });
+                        
+                        audio.addEventListener('error', (e) => {
+                            console.error(`오디오 파일 로드 실패: ${src}`, e);
+                            reject(e);
+                        }, { once: true });
+                        
+                        audio.src = src;
+                        audio.load();
+                    } catch (e) {
+                        console.error(`오디오 프리로딩 오류: ${src}`, e);
+                        reject(e);
+                    }
+                });
+            };
+            
+            // 비동기로 오디오 프리로딩
+            Promise.allSettled([
+                preloadAudio(beepSound),
+                preloadAudio(fanfareSound)
+            ]).then(results => {
+                console.log("오디오 파일 프리로딩 완료:", results);
+            });
+        }
+
+        // 비프음 재생 함수
+        function startBeepLoop() {
+            // 기존 비프음 정리
+            stopBeepLoop();
+            
+            console.log("비프음 재생 시작");
+            
+            // 입력창 포커스 확인
+            const targetTimeInput = document.getElementById('target-time');
+            if (targetTimeInput && document.activeElement === targetTimeInput) {
+                console.log("입력창 포커스 상태: 비프음 재생 건너뜀");
                 return;
             }
             
-            // 전체 진행률 (0-1 사이 값)
-            const progress = elapsed / totalDuration;
-            
-            // 완전히 일정한 속도로 회전 (조정된 각도 사용)
-            const currentAngle = adjustedFinalAngle * progress;
-            
-            // 회전 적용
-            document.getElementById('rotating-container').style.transform = 
-                `rotate(${currentAngle}deg)`;
-            
-            // 다음 프레임 요청
-            animationFrameId = requestAnimationFrame(animate);
-        }
-        
-        // 애니메이션 시작
-        animationFrameId = requestAnimationFrame(animate);
-        
-        // 백업 타이머: 정확히 서버의 지속 시간 후에 애니메이션 종료를 보장
-        setTimeout(() => {
-            // 애니메이션이 아직 완료되지 않았다면
-            if (!animationCompleted) {
-                // 애니메이션 프레임 취소
-                cancelAnimationFrame(animationFrameId);
-                
-                // 조정된 각도로 최종 위치 설정
-                document.getElementById('rotating-container').style.transform = 
-                    `rotate(${adjustedFinalAngle}deg)`;
-                
-                // 비프음 중지 (백업 타이머에서도)
-                stopBeepLoop();
-                
-                // 원판 멈춤과 당첨자 선택 동시에 처리 (지연 없음)
-                socket.emit('confirm_winner');
-                
-                console.log('백업 타이머로 애니메이션 종료');
+            try {
+                // 새 오디오 객체 생성
+                beepAudio = new Audio(beepSound);
+                beepAudio.loop = true;
+                beepAudio.play().catch(err => {
+                    console.error("비프음 재생 실패:", err);
+                });
+            } catch (e) {
+                console.error("비프음 시작 중 오류:", e);
             }
-        }, totalDuration + 100); // 서버와의 약간의 시간차를 고려
-    });
-    
-    // 게임 리셋 이벤트 처리
-    socket.on('game_reset_complete', function() {
-        console.log("게임 리셋 완료");
-        document.getElementById('start-button').disabled = false;
-        document.getElementById('rotating-container').style.transform = 'rotate(0deg)';
-        document.getElementById('winner').innerText = '';
-        document.getElementById('congratulation').style.display = 'none';
-        
-        // 소리 중지
-        stopAllSounds();
-        
-        // 카운트다운 정리
-        if (countdownInterval) {
-            clearInterval(countdownInterval);
-            document.getElementById('remaining-time').innerText = '--:--:--';
         }
-    });
-    
-    // 페이지 클릭 시 소리 재생 권한 얻기 (한 번만)
-    let initialSoundPermissionObtained = false;
-    document.body.addEventListener('click', function(e) {
-        // 이미 권한을 획득했거나 입력창이나 시작 버튼을 클릭한 경우는 무시
-        if (initialSoundPermissionObtained || 
-            e.target.id === 'target-time' || 
-            e.target.id === 'start-button' ||
-            e.target.closest('#time-controls')) {
-            return;
-        }
-        
-        // 권한 획득을 위한 사운드 테스트 (한 번만 실행)
-        testSound();
-        initialSoundPermissionObtained = true;
-    });
-};
 
-// 디버깅용 - 브라우저 콘솔에서 실행할 수 있는 함수
-window.checkAudioStatus = function() {
-    console.log("현재 오디오 객체:", window.beepAudio);
-    console.log("전역 beepAudio:", beepAudio);
-    console.log("활성 오디오 요소 수:", document.querySelectorAll('audio').length);
-    
-    document.querySelectorAll('audio').forEach((audio, index) => {
-        console.log(`오디오 ${index}:`, {
-            paused: audio.paused,
-            src: audio.src,
-            currentTime: audio.currentTime
-        });
-    });
-    
-    console.log("현재 포커스 요소:", document.activeElement);
-    console.log("입력창 포커스 상태:", document.activeElement === document.getElementById('target-time'));
-};
-    </script>
-</body>
-</html>
+        // 비프음 중지 함수
+        function stopBeepLoop() {
+            console.log("비프음 중지 시도");
+            
+            // 오디오 객체 중지
+            if (beepAudio) {
+                try {
+                    beepAudio.pause();
+                    beepAudio.currentTime = 0;
+                    beepAudio.src = '';
+                    beepAudio.load(); // 명시적 언로드
+                    beepAudio = null;
+                } catch(e) {
+                    console.error("비프음 중지 중 오류:", e);
+                }
+            }
+            
+            // 전역 window.beepAudio 객체도 확인
+            if (window.beepAudio) {
+                try {
+                    window.beepAudio.pause();
+                    window.beepAudio.currentTime = 0;
+                    window.beepAudio.src = '';
+                    window.beepAudio.load();
+                    window.beepAudio = null;
+                } catch(e) {
+                    console.error("window.beepAudio 중지 중 오류:", e);
+                }
+            }
+            
+            // 인터벌 제거
+            if (beepLoopInterval) {
+                clearInterval(beepLoopInterval);
+                beepLoopInterval = null;
+            }
+            
+            // 모든 오디오 요소 강제 중지
+            try {
+                document.querySelectorAll('audio').forEach(function(audio) {
+                    try {
+                        audio.pause();
+                        audio.currentTime = 0;
+                        audio.src = '';
+                        audio.load();
+                    } catch(e) {
+                        console.error("오디오 요소 중지 중 오류:", e);
+                    }
+                });
+            } catch(e) {
+                console.error("오디오 요소 중지 중 오류:", e);
+            }
+            
+            console.log("비프음 중지 완료");
+        }
+
+        // 모든 소리 중지 함수 (별도 함수로 분리)
+        function stopAllSounds() {
+            stopBeepLoop();
+        }
+
+        // 팡파레 재생 - 개선된 버전
+        function playFanfare() {
+            console.log("팡파레 재생, 소리 파일:", fanfareSound);
+            
+            try {
+                const audio = new Audio(fanfareSound);
+                audio.volume = 0.8; // 볼륨 약간 낮춤
+                audio.play()
+                    .then(() => console.log("팡파레 재생 성공"))
+                    .catch(err => console.error("팡파레 재생 실패:", err));
+            } catch (e) {
+                console.error("팡파레 재생 중 오류:", e);
+            }
+        }
+
+        // 카운트다운 함수
+        function startCountdown(durationInSeconds) {
+            // 이전 카운트다운이 있으면 정리
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            
+            // 목표 시간 설정
+            const now = new Date();
+            targetDateTime = new Date(now.getTime() + durationInSeconds * 1000);
+            
+            // 즉시 한 번 업데이트
+            updateCountdown();
+            
+            // 1초마다 카운트다운 업데이트
+            countdownInterval = setInterval(updateCountdown, 1000);
+        }
+
+        // 카운트다운 업데이트 함수
+        function updateCountdown() {
+            if (!targetDateTime) {
+                document.getElementById('remaining-time').innerText = '--:--:--';
+                return;
+            }
+            
+            const now = new Date();
+            const diff = targetDateTime - now;
+            
+            if (diff <= 0) {
+                // 카운트다운 종료
+                document.getElementById('remaining-time').innerText = '00:00:00';
+                clearInterval(countdownInterval);
+                return;
+            }
+            
+            // 시, 분, 초 계산
+            let seconds = Math.floor(diff / 1000);
+            let minutes = Math.floor(seconds / 60);
+            let hours = Math.floor(minutes / 60);
+            
+            seconds %= 60;
+            minutes %= 60;
+            
+            // 표시 형식 포맷팅
+            const formattedHours = hours.toString().padStart(2, '0');
+            const formattedMinutes = minutes.toString().padStart(2, '0');
+            const formattedSeconds = seconds.toString().padStart(2, '0');
+            
+            document.getElementById('remaining-time').innerText = 
+                `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+        }
+
+        // 현재 시간 업데이트 함수
+        function updateTime() {
+            const now = new Date();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const seconds = now.getSeconds().toString().padStart(2, '0');
+            const timeString = `${hours}:${minutes}:${seconds}`;
+            
+            // 현재 시간 표시
+            const currentTimeElements = document.querySelectorAll('#current-time');
+            currentTimeElements.forEach(element => {
+                if (element) {
+                    element.innerText = timeString;
+                }
+            });
+            
+            // 처음 로드될 때만 target-time 입력 필드에 현재 시간 + 1분을 기본값으로 설정
+            const targetTimeElement = document.getElementById('target-time');
+            if (targetTimeElement && !targetTimeElement.value) {
+                const laterDate = new Date(now.getTime() + 60000); // 현재 시간 + 1분
+                const laterHours = laterDate.getHours().toString().padStart(2, '0');
+                const laterMinutes = laterDate.getMinutes().toString().padStart(2, '0');
+                const laterSeconds = laterDate.getSeconds().toString().padStart(2, '0');
+                targetTimeElement.value = `${laterHours}:${laterMinutes}:${laterSeconds}`;
+            }
+        }
+
+        // 소리 직접 테스트
+        function testSound() {
+            try {
+                const beep = new Audio('/static/beep.mp3');
+                beep.volume = 0.8; // 볼륨 약간 낮춤
+                beep.play().then(() => {
+                    console.log("사용자 상호작용으로 비프음 테스트 성공");
+                }).catch(err => {
+                    console.error("비프음 테스트 실패:", err);
+                });
+            } catch(e) {
+                console.error("소리 테스트 중 오류:", e);
+            }
+        }
+
+        // 시작 버튼 클릭 함수
+        function startRotation() {
+            console.log('시작 버튼 클릭됨');
+            document.getElementById('start-button').disabled = true;
+            
+            // 먼저 비프음 중지
+            stopAllSounds();
+            
+            const timeInput = document.getElementById('target-time').value;
+            if (!timeInput) {
+                alert('시간을 입력해주세요.');
+                document.getElementById('start-button').disabled = false;
+                return;
+            }
+            
+            // 시:분:초 형식 검증
+            const timePattern = /^([0-1][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])$/;
+            if (!timePattern.test(timeInput)) {
+                alert('시간 형식은 HH:MM:SS여야 합니다. (예: 15:30:00)');
+                document.getElementById('start-button').disabled = false;
+                return;
+            }
+            
+            // 입력창에서 포커스 제거
+            document.getElementById('target-time').blur();
+            
+            // 소리 테스트 (브라우저 권한 획득)
+            testSound();
+            
+            // 로컬 시간을 UTC로 변환
+            const [localH, localM, localS] = timeInput.split(':').map(Number);
+            const localDate = new Date();
+            localDate.setHours(localH, localM, localS, 0);
+            const utcMs = localDate.getTime();
+            const utcDate = new Date(utcMs);
+            const utcHours = utcDate.getUTCHours().toString().padStart(2, '0');
+            const utcMins = utcDate.getUTCMinutes().toString().padStart(2, '0');
+            const utcSecs = utcDate.getUTCSeconds().toString().padStart(2, '0');
+            const formattedTime = `${utcHours}:${utcMins}:${utcSecs}`;
+            
+            console.log('Emitting start_rotation with UTC time:', formattedTime);
+            socket.emit('start_rotation', { time: formattedTime });
+        }
+
+        // 페이지 로드 완료 시 실행 함수
+        window.onload = function() {
+            console.log("페이지 로드 완료");
+            
+            // 모든 소리 정지
+            stopAllSounds();
+            
+            // 오디오 파일 로드
+            loadSounds();
+            
+            // 차트 초기화
+            try {
+                initChart();
+                console.log("차트 초기화 성공");
+            } catch(e) {
+                console.error("차트 초기화 오류:", e);
+            }
+            
+            // 시간 업데이트 즉시 실행
+            updateTime();
+            
+            // 1초마다 시간 업데이트
+            setInterval(updateTime, 1000);
+            console.log("시간 업데이트 타이머 설정 완료");
+            
+            // 시작 버튼에만 클릭 리스너 추가
+            const startButton = document.getElementById('start-button');
+            if (startButton) {
+                startButton.addEventListener('click', function() {
+                    stopBeepLoop(); // 클릭 시 비프음 중지
+                });
+            }
+            
+            // 입력창 관련 이벤트 처리 개선
+            const targetTimeInput = document.getElementById('target-time');
+            if (targetTimeInput) {
+                // 입력창에 여러 이벤트 리스너 추가
+                ['mousedown', 'mouseup', 'focus', 'focusin', 'click', 'touchstart'].forEach(function(eventName) {
+                    targetTimeInput.addEventListener(eventName, function(e) {
+                        // 모든 이벤트에서 비프음 중지
+                        stopBeepLoop();
+                        // 이벤트 전파 중단
+                        e.stopPropagation();
+                        console.log(`입력창 ${eventName} 이벤트: 비프음 중지됨`);
+                    });
+                });
+                
+                // 키보드 이벤트도 처리
+                targetTimeInput.addEventListener('keydown', function(e) {
+                    stopBeepLoop();
+                });
+            }
+            
+            // 소켓 연결 상태 확인
+            socket.on('connect', function() {
+                console.log('서버에 연결되었습니다.');
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('서버와 연결이 끊어졌습니다.');
+            });
+            
+            // 소켓 이벤트 처리
+            // 게임 시작 이벤트 처리
+            socket.on('start_game', function(data) {
+                console.log('게임 시작:', data);
+                if (document.getElementById('start-button')) {
+                    document.getElementById('start-button').disabled = true;
+                }
+                
+                // 서버에서 받은 게임 정보
+                const duration = data.duration;
+                const finalAngle = data.finalAngle;
+                const winner = data.winner;
+                
+                // 게스트 모드에서 슈팅시간 표시 업데이트
+                const targetTimeDisplay = document.getElementById('target-time-display');
+                if (targetTimeDisplay) {
+                    // 현재 시간 + 슈팅 지속 시간으로 슈팅시간 계산
+                    const targetDate = new Date(Date.now() + duration * 1000);
+                    const hours = targetDate.getHours().toString().padStart(2, '0');
+                    const minutes = targetDate.getMinutes().toString().padStart(2, '0');
+                    const seconds = targetDate.getSeconds().toString().padStart(2, '0');
+                    targetTimeDisplay.innerText = `${hours}:${minutes}:${seconds}`;
+                }
+                
+                // 매우 중요: 원판 회전 방향을 고려한 화살표 위치 보정
+                // 서버의 당첨자 계산과 일치하도록 finalAngle을 조정
+                const adjustedFinalAngle = finalAngle + 2; // 각도 조정 값은 테스트 필요
+                
+                console.log('받은 회전 정보:', {
+                    duration: duration + '초',
+                    finalAngle: finalAngle + '도',
+                    adjustedAngle: adjustedFinalAngle + '도',
+                    winner: winner
+                });
+                
+                // 축하 메시지 숨기기
+                document.getElementById('congratulation').style.display =
