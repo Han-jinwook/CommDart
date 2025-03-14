@@ -138,11 +138,15 @@ total_count = sum(counts)
 
 @app.route('/')
 def index():
-    return render_template('index.html',
-                           participants=participants,
-                           colors=colors,
-                           user=current_user,
-                           is_admin=current_user.is_authenticated)  # 로그인 상태를 is_admin 변수로 전달
+    if current_user.is_authenticated:
+        # 로그인한 사용자는 바로 게임 화면으로
+        return render_template('index.html',
+                             participants=participants,
+                             colors=colors,
+                             user=current_user)
+    else:
+        # 로그인하지 않은 사용자는 로그인 페이지로
+        return render_template('welcome.html')
 
 # ----- 회전 게임 로직 -----
 games = {}
