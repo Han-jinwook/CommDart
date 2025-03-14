@@ -341,6 +341,7 @@ def send_current_time():
     """현재 시간을 1초마다 클라이언트로 전송하는 함수"""
     while True:
         now = datetime.datetime.now().strftime('%H:%M:%S')
+        print(f"[DEBUG] send_current_time 실행 중 - 현재 시간 전송: {now}")  # 디버깅 로그 추가
         socketio.emit('update_current_time', {'current_time': now}, namespace='/')
         time.sleep(1)  # 1초마다 업데이트
 
