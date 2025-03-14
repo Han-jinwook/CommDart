@@ -334,6 +334,20 @@ def calculate_winner_at_angle(angle):
     print(f"ERROR: 당첨자를 결정할 수 없음 (각도: {normalized_angle:.2f}°)")
     return names[0]  # 기본값으로 첫 번째 참가자 반환
 
+import time
+from threading import Thread
+
+def send_current_time():
+    """현재 시간을 1초마다 클라이언트로 전송하는 함수"""
+    while True:
+        now = datetime.datetime.now().strftime('%H:%M:%S')
+        socketio.emit('update_current_time', {'current_time': now}, namespace='/')
+        time.sleep(1)  # 1초마다 업데이트
+
+# 서버 시작 시 현재 시간 업데이트 쓰레드 실행
+Thread(target=send_current_time, daemon=True).start()
+
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=True)
