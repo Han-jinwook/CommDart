@@ -272,7 +272,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.1/dist/socket.io.min.js"></script>
     <script>
-        const socket = io();
+        let socket;
         let chart;
         let countdownInterval = null;
         let targetDateTime = null;
@@ -606,8 +606,11 @@ function updateCountdown() {
             socket.emit('start_rotation', { time: formattedTime });
         }
 
-window.onload = function() {
-    console.log("페이지 로드 완료");
+window.onload = function () {
+    console.log("🚀 페이지 로드 완료, Socket.io 실행!");
+    socket = io();  // ✅ 페이지 로드 완료 후 실행
+    console.log("✅ socket 객체 생성 완료:", socket);
+};
     
     stopAllSounds();
     
