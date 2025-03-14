@@ -606,11 +606,25 @@ function updateCountdown() {
             socket.emit('start_rotation', { time: formattedTime });
         }
 
-window.onload = function () {
-    console.log("🚀 페이지 로드 완료, Socket.io 실행!");
-    socket = io();  // ✅ 페이지 로드 완료 후 실행
-    console.log("✅ socket 객체 생성 완료:", socket);
-};
+   window.onload = function () {
+        console.log("🚀 페이지 로드 완료, Socket.io 실행!");
+
+        // 🚀 서버의 정확한 주소를 설정
+        socket = io("wss://commdart.onrender.com", { transports: ['websocket'] });
+
+        socket.on("connect", function() {
+            console.log("✅ WebSocket 연결 성공!");
+        });
+
+        socket.on("disconnect", function() {
+            console.log("❌ WebSocket 연결이 끊어졌습니다.");
+        });
+
+        socket.on("update_current_time", function(data) {
+            console.log("⏰ 현재 시간 업데이트:", data.current_time);
+            document.getElementById("current-time").innerText = data.current_time;
+        });
+    };
     
     stopAllSounds();
     
