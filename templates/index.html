@@ -383,63 +383,40 @@
         }
 
   // 비프음 중지 함수
+// 비프음 중지 함수를 더 강력하게 수정
 function stopBeepLoop() {
-    // 기존 오디오 객체 중지
+    console.log("비프음 중지 시도");
+    
+    // 기존 방식으로 중지 시도
     if (beepAudio) {
         try {
             beepAudio.pause();
             beepAudio.currentTime = 0;
             beepAudio.src = '';
-            beepAudio.load(); // 명시적 언로드
+            beepAudio.load(); // 명시적 언로드 추가
             beepAudio = null;
         } catch(e) {
             console.error("비프음 중지 중 오류:", e);
         }
-        console.log("비프음 중지됨");
     }
     
-    // 인터벌 제거 (사용 중이었다면)
-    if (beepLoopInterval) {
-        clearInterval(beepLoopInterval);
-        beepLoopInterval = null;
-    }
-    
-    // 모든 오디오 요소 검사 및 중지 (백업 방법)
+    // Audio 태그 생성 방식으로 중지 시도 (대체 방법)
     try {
-        const allAudios = document.querySelectorAll('audio');
-        allAudios.forEach(audio => {
-            try {
-                audio.pause();
-                audio.currentTime = 0;
-                audio.src = '';
-                audio.load(); // 명시적 언로드
-            } catch(innerE) {
-                console.error("오디오 요소 중지 중 오류:", innerE);
-            }
+        // 모든 오디오 요소 강제 중지
+        document.querySelectorAll('audio').forEach(function(audio) {
+            audio.pause();
+            audio.src = '';
+            audio.remove(); // DOM에서 완전히 제거
         });
     } catch(e) {
         console.error("오디오 요소 중지 중 오류:", e);
     }
     
-    // AudioContext API를 사용하는 경우 대비 (브라우저 호환성)
-    try {
-        if (window.audioContext) {
-            window.audioContext.close().then(() => {
-                window.audioContext = null;
-                console.log("AudioContext 종료됨");
-            }).catch(e => {
-                console.error("AudioContext 종료 중 오류:", e);
-            });
-        }
-    } catch(e) {
-        console.error("AudioContext 종료 중 오류:", e);
-    }
-    
-    // 모든 소리 관련 변수 초기화
+    // 추가 안전장치: 모든 소리 변수 초기화
     beepAudio = null;
     beepLoopInterval = null;
     
-    console.log("모든 소리 중지 시도 완료");
+    console.log("비프음 중지 완료");
 }
 
         // 팡파레 재생 - 개선된 버전
