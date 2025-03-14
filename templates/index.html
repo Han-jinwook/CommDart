@@ -298,66 +298,52 @@
             }
         }
 
-        function initChart() {
-            console.log("차트 초기화 시작");
-            
-            if (chart) {
-                chart.destroy();
-            }
-            
-            Chart.register(ChartDataLabels);
-            
-            const canvas = document.getElementById('dart-chart');
-            if (!canvas) {
-                console.error("차트 캔버스 요소를 찾을 수 없습니다.");
-                return;
-            }
-            
-            const ctx = canvas.getContext('2d');
-            
-            chart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
-                    datasets: [{
-                        data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
-                        backgroundColor: generateColors({{ participants|length }})
-                    }]
+function initChart() {
+    try {
+        Chart.register(ChartDataLabels);
+        
+        const ctx = document.getElementById('dart-chart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
+                datasets: [{
+                    data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
+                    backgroundColor: generateColors({{ participants|length }})
+                }]
+            },
+            options: {
+                rotation: -Math.PI / 2,
+                animation: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false },
+                    datalabels: {
+                        color: '#000',
+                        formatter: function(value, context) {
+                            return context.chart.data.labels[context.dataIndex];
+                        },
+                        font: { size: 14, weight: 'bold' },
+                        align: 'center',
+                        anchor: 'center',
+                        clamp: true,
+                        offset: 0,
+                        backgroundColor: function(context) {
+                            return hexToRgba(context.dataset.backgroundColor[context.dataIndex], 0.7);
+                        },
+                        borderRadius: 4,
+                        padding: 4,
+                        textAlign: 'center'
+                    }
                 },
-                options: {
-                    rotation: -Math.PI / 2,
-                    animation: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { enabled: false },
-                        datalabels: {
-                            color: '#000',
-                            formatter: function(value, context) {
-                                return context.chart.data.labels[context.dataIndex];
-                            },
-                            font: { 
-                                size: 14,
-                                weight: 'bold'
-                            },
-                            align: 'center',
-                            anchor: 'center',
-                            clamp: true,
-                            offset: 0,
-                            backgroundColor: function(context) {
-                                return hexToRgba(context.dataset.backgroundColor[context.dataIndex], 0.7);
-                            },
-                            borderRadius: 4,
-                            padding: 4,
-                            textAlign: 'center'
-                        }
-                    },
-                    cutout: '40%',
-                    radius: '100%'
-                }
-            });
-            
-            console.log("차트 초기화 완료");
-        }
+                cutout: '40%',
+                radius: '100%'
+            }
+        });
+    } catch(e) {
+        console.error("차트 초기화 오류:", e);
+    }
+}
 
         function generateColors(count) {
             const colors = [];
@@ -629,281 +615,278 @@
             socket.emit('start_rotation', { time: formattedTime });
         }
 
-        // 페이지 로드 완료 시 실행 함수
-        window.onload = function() {
-            console.log("페이지 로드 완료");
-            
-            stopAllSounds();
-            
-            loadSounds();
-            
-            const chartContainer = document.getElementById('chart-container');
-            const rotatingContainer = document.getElementById('rotating-container');
-            
-            if (!chartContainer) {
-                console.error("차트 컨테이너를 찾을 수 없습니다.");
-            }
-            
-            if (!rotatingContainer) {
-                console.error("회전 컨테이너를 찾을 수 없습니다.");
-            }
-            
-            try {
-                initChart();
-                console.log("차트 초기화 성공");
-            } catch(e) {
-                console.error("차트 초기화 오류:", e);
-                console.error(e.stack);
-            }
-            
-            updateTime();
-            
-            setInterval(updateTime, 1000);
-            console.log("시간 업데이트 타이머 설정 완료");
-            
-            const startButton = document.getElementById('start-button');
-            if (startButton) {
-                startButton.addEventListener('click', function() {
-                    stopBeepLoop();
-                });
-            }
-            
-            const targetTimeInput = document.getElementById('target-time');
-            if (targetTimeInput) {
-                ['mousedown', 'mouseup', 'focus', 'focusin', 'click', 'touchstart'].forEach(function(eventName) {
-                    targetTimeInput.addEventListener(eventName, function(e) {
-                        stopBeepLoop();
-                        e.stopPropagation();
-                        console.log(`입력창 ${eventName} 이벤트: 비프음 중지됨`);
-                    });
-                });
-                
-                targetTimeInput.addEventListener('keydown', function(e) {
-                    stopBeepLoop();
-                });
-            }
-            
-            socket.on('connect', function() {
-                console.log('서버에 연결되었습니다.');
+window.onload = function() {
+    console.log("페이지 로드 완료");
+    
+    stopAllSounds();
+    
+    loadSounds();
+    
+    const chartContainer = document.getElementById('chart-container');
+    const rotatingContainer = document.getElementById('rotating-container');
+    
+    if (!chartContainer) {
+        console.error("차트 컨테이너를 찾을 수 없습니다.");
+    }
+    
+    if (!rotatingContainer) {
+        console.error("회전 컨테이너를 찾을 수 없습니다.");
+    }
+    
+    try {
+        initChart();
+        console.log("차트 초기화 성공");
+    } catch(e) {
+        console.error("차트 초기화 오류:", e);
+        console.error(e.stack);
+    }
+    
+    updateTime();
+    
+    setInterval(updateTime, 1000);
+    console.log("시간 업데이트 타이머 설정 완료");
+    
+    const startButton = document.getElementById('start-button');
+    if (startButton) {
+        startButton.addEventListener('click', function() {
+            stopBeepLoop();
+        });
+    }
+    
+    const targetTimeInput = document.getElementById('target-time');
+    if (targetTimeInput) {
+        ['mousedown', 'mouseup', 'focus', 'focusin', 'click', 'touchstart'].forEach(function(eventName) {
+            targetTimeInput.addEventListener(eventName, function(e) {
+                stopBeepLoop();
+                e.stopPropagation();
+                console.log(`입력창 ${eventName} 이벤트: 비프음 중지됨`);
             });
+        });
+        
+        targetTimeInput.addEventListener('keydown', function(e) {
+            stopBeepLoop();
+        });
+    }
+    
+    socket.on('connect', function() {
+        console.log('서버에 연결되었습니다.');
+    });
+    
+    socket.on('disconnect', function() {
+        console.log('서버와 연결이 끊어졌습니다.');
+    });
+    
+    socket.on('start_game', function(data) {
+        console.log('게임 시작:', data);
+        if (document.getElementById('start-button')) {
+            document.getElementById('start-button').disabled = true;
+        }
+        
+        const duration = data.duration;
+        const finalAngle = data.finalAngle;
+        const winner = data.winner;
+        
+        const targetTimeDisplay = document.getElementById('target-time-display');
+        if (targetTimeDisplay) {
+            const targetDate = new Date(Date.now() + duration * 1000);
+            const hours = targetDate.getHours().toString().padStart(2, '0');
+            const minutes = targetDate.getMinutes().toString().padStart(2, '0');
+            const seconds = targetDate.getSeconds().toString().padStart(2, '0');
+            targetTimeDisplay.innerText = `${hours}:${minutes}:${seconds}`;
+        }
+        
+        const adjustedFinalAngle = finalAngle + 2;
+        
+        console.log('받은 회전 정보:', {
+            duration: duration + '초',
+            finalAngle: finalAngle + '도',
+            adjustedAngle: adjustedFinalAngle + '도',
+            winner: winner
+        });
+        
+        document.getElementById('congratulation').style.display = 'none';
+        document.getElementById('winner').innerText = '';
+        
+        startCountdown(duration);
+        
+        const startTime = Date.now();
+        const totalDuration = duration * 1000;
+        
+        window.animationInfo = {
+            duration,
+            finalAngle,
+            adjustedFinalAngle,
+            winner,
+            startTime,
+            endTime: startTime + totalDuration
+        };
+        
+        let animationFrameId = null;
+        let animationCompleted = false;
+
+        function animate() {
+            const now = Date.now();
+            const elapsed = now - startTime;
             
-            socket.on('disconnect', function() {
-                console.log('서버와 연결이 끊어졌습니다.');
-            });
-            
-            socket.on('start_game', function(data) {
-                console.log('게임 시작:', data);
-                if (document.getElementById('start-button')) {
-                    document.getElementById('start-button').disabled = true;
-                }
-                
-                const duration = data.duration;
-                const finalAngle = data.finalAngle;
-                const winner = data.winner;
-                
-                const targetTimeDisplay = document.getElementById('target-time-display');
-                if (targetTimeDisplay) {
-                    const targetDate = new Date(Date.now() + duration * 1000);
-                    const hours = targetDate.getHours().toString().padStart(2, '0');
-                    const minutes = targetDate.getMinutes().toString().padStart(2, '0');
-                    const seconds = targetDate.getSeconds().toString().padStart(2, '0');
-                    targetTimeDisplay.innerText = `${hours}:${minutes}:${seconds}`;
-                }
-                
-                const adjustedFinalAngle = finalAngle + 2;
-                
-                console.log('받은 회전 정보:', {
-                    duration: duration + '초',
-                    finalAngle: finalAngle + '도',
-                    adjustedAngle: adjustedFinalAngle + '도',
-                    winner: winner
-                });
-                
-                document.getElementById('congratulation').style.display = 'none';
-                document.getElementById('winner').innerText = '';
-                
-                startCountdown(duration);
-                
-                const startTime = Date.now();
-                const totalDuration = duration * 1000;
-                
-                window.animationInfo = {
-                    duration,
-                    finalAngle,
-                    adjustedFinalAngle,
-                    winner,
-                    startTime,
-                    endTime: startTime + totalDuration
-                };
-                
-                let animationFrameId = null;
-                let animationCompleted = false;
-                
-                function animate() {
-                    const now = Date.now();
-                    const elapsed = now - startTime;
-                    
-                    if (elapsed >= totalDuration) {
-                        if (!animationCompleted) {
-                            animationCompleted = true;
-                            
-                            document.getElementById('rotating-container').style.transform = 
-                                `rotate(${adjustedFinalAngle}deg)`;
-                            
-                            console.log('애니메이션 완료:', {
-                                adjustedFinal
-console.log('애니메이션 완료:', {
-                                adjustedFinalAngle: adjustedFinalAngle + '도',
-                                elapsedTime: (elapsed / 1000).toFixed(2) + '초'
-                            });
-                            
-                            stopBeepLoop();
-                            
-                            socket.emit('confirm_winner');
-                        }
-                        return;
-                    }
-                    
-                    const progress = elapsed / totalDuration;
-                    
-                    const currentAngle = adjustedFinalAngle * progress;
+            if (elapsed >= totalDuration) {
+                if (!animationCompleted) {
+                    animationCompleted = true;
                     
                     document.getElementById('rotating-container').style.transform = 
-                        `rotate(${currentAngle}deg)`;
+                        `rotate(${adjustedFinalAngle}deg)`;
                     
-                    animationFrameId = requestAnimationFrame(animate);
-                }
-                
-                animationFrameId = requestAnimationFrame(animate);
-                
-                setTimeout(() => {
-                    if (!animationCompleted) {
-                        cancelAnimationFrame(animationFrameId);
-                        
-                        document.getElementById('rotating-container').style.transform = 
-                            `rotate(${adjustedFinalAngle}deg)`;
-                        
-                        stopBeepLoop();
-                        
-                        socket.emit('confirm_winner');
-                        
-                        console.log('백업 타이머로 애니메이션 종료');
-                    }
-                }, totalDuration + 100);
-            });
-            
-            socket.on('update_winner', function(data) {
-                stopAllSounds();
-                
-                document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
-                if (document.getElementById('start-button')) {
-                    document.getElementById('start-button').disabled = false;
-                }
-                
-                if (window.animationInfo) {
-                    const totalTime = (Date.now() - window.animationInfo.startTime) / 1000;
-                    console.log('게임 종료 정보:', {
-                        예상시간: (window.animationInfo.duration) + '초',
-                        실제경과시간: totalTime.toFixed(2) + '초',
-                        수신된당첨자: data.winner,
-                        서버예상당첨자: window.animationInfo.winner
+                    console.log('애니메이션 완료:', {
+                        adjustedFinalAngle: adjustedFinalAngle + '도',
+                        elapsedTime: (elapsed / 1000).toFixed(2) + '초'
                     });
                     
-                    if (data.winner !== window.animationInfo.winner) {
-                        console.error('당첨자 불일치 발생!', {
-                            서버예상: window.animationInfo.winner,
-                            실제수신: data.winner
-                        });
-                    }
+                    stopBeepLoop();
+                    
+                    socket.emit('confirm_winner');
                 }
-                
-                const congratulation = document.getElementById('congratulation');
-                congratulation.style.display = 'block';
-                congratulation.classList.add('blink');
-                
-                setTimeout(() => {
-                    congratulation.classList.remove('blink');
-                }, 3000);
-                
-                if (countdownInterval) {
-                    clearInterval(countdownInterval);
-                    document.getElementById('remaining-time').innerText = '00:00:00';
-                }
-            });
+                return;
+            }
             
-            socket.on('play_fanfare', function() {
-                console.log("팡파레 재생 요청 수신");
+            const progress = elapsed / totalDuration;
+            
+            const currentAngle = adjustedFinalAngle * progress;
+            
+            document.getElementById('rotating-container').style.transform = 
+                `rotate(${currentAngle}deg)`;
+            
+            animationFrameId = requestAnimationFrame(animate);
+        }
+        
+        animationFrameId = requestAnimationFrame(animate);
+        
+        setTimeout(() => {
+            if (!animationCompleted) {
+                cancelAnimationFrame(animationFrameId);
                 
-                const allAudioElements = document.querySelectorAll('audio');
-                allAudioElements.forEach(audio => {
-                    try {
-                        audio.pause();
-                        audio.currentTime = 0;
-                    } catch(e) {
-                        console.error("오디오 중지 중 오류:", e);
-                    }
-                });
+                document.getElementById('rotating-container').style.transform = 
+                    `rotate(${adjustedFinalAngle}deg)`;
                 
                 stopBeepLoop();
                 
-                setTimeout(() => {
-                    playFanfare();
-                }, 100);
+                socket.emit('confirm_winner');
+                
+                console.log('백업 타이머로 애니메이션 종료');
+            }
+        }, totalDuration + 100);
+    });
+    
+    socket.on('update_winner', function(data) {
+        stopAllSounds();
+        
+        document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
+        if (document.getElementById('start-button')) {
+            document.getElementById('start-button').disabled = false;
+        }
+        
+        if (window.animationInfo) {
+            const totalTime = (Date.now() - window.animationInfo.startTime) / 1000;
+            console.log('게임 종료 정보:', {
+                예상시간: (window.animationInfo.duration) + '초',
+                실제경과시간: totalTime.toFixed(2) + '초',
+                수신된당첨자: data.winner,
+                서버예상당첨자: window.animationInfo.winner
             });
             
-            socket.on('error', function(data) {
-                stopAllSounds();
-                
-                alert(data.message);
-                if (document.getElementById('start-button')) {
-                    document.getElementById('start-button').disabled = false;
-                }
-            });
-            
-            socket.on('play_beep', function() {
-                console.log("비프음 재생 요청 수신");
-                
-                const targetTimeInput = document.getElementById('target-time');
-                const isInputFocused = targetTimeInput && document.activeElement === targetTimeInput;
-                
-                if (isInputFocused) {
-                    console.log("입력창 포커스 상태: 비프음 재생 건너뜀");
-                    return;
-                }
-                
-                startBeepLoop();
-            });
-            
-            socket.on('game_reset_complete', function() {
-                console.log("게임 리셋 완료");
-                if (document.getElementById('start-button')) {
-                    document.getElementById('start-button').disabled = false;
-                }
-                document.getElementById('rotating-container').style.transform = 'rotate(0deg)';
-                document.getElementById('winner').innerText = '';
-                document.getElementById('congratulation').style.display = 'none';
-                
-                stopAllSounds();
-                
-                if (countdownInterval) {
-                    clearInterval(countdownInterval);
-                    document.getElementById('remaining-time').innerText = '--:--:--';
-                }
-            });
-            
-            let initialSoundPermissionObtained = false;
-            document.body.addEventListener('click', function(e) {
-                if (initialSoundPermissionObtained || 
-                    e.target.id === 'target-time' || 
-                    e.target.id === 'start-button' ||
-                    e.target.closest('#time-controls')) {
-                    return;
-                }
-                
-                testSound();
-                initialSoundPermissionObtained = true;
-            });
-        };
+            if (data.winner !== window.animationInfo.winner) {
+                console.error('당첨자 불일치 발생!', {
+                    서버예상: window.animationInfo.winner,
+                    실제수신: data.winner
+                });
+            }
+        }
+        
+        const congratulation = document.getElementById('congratulation');
+        congratulation.style.display = 'block';
+        congratulation.classList.add('blink');
+        
+        setTimeout(() => {
+            congratulation.classList.remove('blink');
+        }, 3000);
+        
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+            document.getElementById('remaining-time').innerText = '00:00:00';
+        }
+    });
+    
+    socket.on('play_fanfare', function() {
+        console.log("팡파레 재생 요청 수신");
+        
+        const allAudioElements = document.querySelectorAll('audio');
+        allAudioElements.forEach(audio => {
+            try {
+                audio.pause();
+                audio.currentTime = 0;
+            } catch(e) {
+                console.error("오디오 중지 중 오류:", e);
+            }
+        });
+        
+        stopBeepLoop();
+        
+        setTimeout(() => {
+            playFanfare();
+        }, 100);
+    });
+    
+    socket.on('error', function(data) {
+        stopAllSounds();
+        
+        alert(data.message);
+        if (document.getElementById('start-button')) {
+            document.getElementById('start-button').disabled = false;
+        }
+    });
+    
+    socket.on('play_beep', function() {
+        console.log("비프음 재생 요청 수신");
+        
+        const targetTimeInput = document.getElementById('target-time');
+        const isInputFocused = targetTimeInput && document.activeElement === targetTimeInput;
+        
+        if (isInputFocused) {
+            console.log("입력창 포커스 상태: 비프음 재생 건너뜀");
+            return;
+        }
+        
+        startBeepLoop();
+    });
+    
+    socket.on('game_reset_complete', function() {
+        console.log("게임 리셋 완료");
+        if (document.getElementById('start-button')) {
+            document.getElementById('start-button').disabled = false;
+        }
+        document.getElementById('rotating-container').style.transform = 'rotate(0deg)';
+        document.getElementById('winner').innerText = '';
+        document.getElementById('congratulation').style.display = 'none';
+        
+        stopAllSounds();
+        
+        if (countdownInterval) {
+            clearInterval(countdownInterval);
+            document.getElementById('remaining-time').innerText = '--:--:--';
+        }
+    });
+    
+    let initialSoundPermissionObtained = false;
+    document.body.addEventListener('click', function(e) {
+        if (initialSoundPermissionObtained || 
+            e.target.id === 'target-time' || 
+            e.target.id === 'start-button' ||
+            e.target.closest('#time-controls')) {
+            return;
+        }
+        
+        testSound();
+        initialSoundPermissionObtained = true;
+    });
+};
     </script>
 </body>
 </html>
