@@ -641,57 +641,52 @@ function updateCountdown() {
             targetTimeElement.value = `${laterHours}:${laterMinutes}:${laterSeconds}`;
         }
 
-    // 파일 업로드 기능 초기화
-    const fileInput = document.getElementById('participant-file');
-    if (fileInput) {
-        fileInput.addEventListener('change', function(e) {
-            const fileName = e.target.files[0]?.name || '선택된 파일 없음';
-            document.getElementById('selected-filename').innerText = fileName;
+        // 파일 업로드 기능 초기화
+        const fileInput = document.getElementById('participant-file');
+        if (fileInput) {
+            fileInput.addEventListener('change', function(e) {
+                const fileName = e.target.files[0]?.name || '선택된 파일 없음';
+                document.getElementById('selected-filename').innerText = fileName;
             
-            if (e.target.files[0]) {
-                // 파일이 선택되면 자동으로 업로드
-                uploadParticipantFile(e.target.files[0]);
-            }
-        });
-    }
-    
-    // 나머지 기존 코드...
-};
-
-// 파일 업로드 함수
-function uploadParticipantFile(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const uploadResult = document.getElementById('upload-result');
-    uploadResult.style.display = 'block';
-    uploadResult.innerHTML = '업로드 중... <img src="data:image/gif;base64,R0lGODlhEAAQAPIAAP///wAAAMLCwkJCQgAAAGJiYoKCgpKSkiH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />';
-    
-    fetch('/upload_participants', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            uploadResult.innerHTML = `<span style="color: green;">✓ 성공: ${data.message}</span>`;
-            
-            // 성공 시 3초 후 새로고침 (선택적)
-            setTimeout(() => {
-                location.reload();
-            }, 3000);
-        } else {
-            uploadResult.innerHTML = `<span style="color: red;">✗ 오류: ${data.message}</span>`;
+                if (e.target.files[0]) {
+                    // 파일이 선택되면 자동으로 업로드
+                    uploadParticipantFile(e.target.files[0]);
+                }
+            });
         }
-    })
-    .catch(error => {
-        console.error('업로드 오류:', error);
-        uploadResult.innerHTML = '<span style="color: red;">✗ 업로드 중 오류가 발생했습니다.</span>';
+
+        // 파일 업로드 함수
+        function uploadParticipantFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+    
+            const uploadResult = document.getElementById('upload-result');
+            uploadResult.style.display = 'block';
+            uploadResult.innerHTML = '업로드 중... <img src="data:image/gif;base64,R0lGODlhEAAQAPIAAP///wAAAMLCwkJCQgAAAGJiYoKCgpKSkiH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />';
+    
+            fetch('/upload_participants', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    uploadResult.innerHTML = `<span style="color: green;">✓ 성공: ${data.message}</span>`;
+            
+                    // 성공 시 3초 후 새로고침 (선택적)
+                    setTimeout(() => {
+                        location.reload();
+                    }, 3000);
+                } else {
+                    uploadResult.innerHTML = `<span style="color: red;">✗ 오류: ${data.message}</span>`;
+                }
+            })
+            .catch(error => {
+                console.error('업로드 오류:', error);
+                uploadResult.innerHTML = '<span style="color: red;">✗ 업로드 중 오류가 발생했습니다.</span>';
     });
 }
-            
-      }
-        
+                    
         // 초기 시간 업데이트
         updateTime();
         
