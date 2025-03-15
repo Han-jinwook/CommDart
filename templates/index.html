@@ -799,20 +799,29 @@ function updateCountdown() {
                             console.log("게스트 슈팅시간 설정:", targetTimeString);
                         }
             
-                        // 남은 시간 업데이트
-                        const now = new Date();
-                        const diffMs = targetDate - now;
-                        if (diffMs > 0) {
-                            targetDateTime = targetDate;
-                            updateCountdown();
-                            if (!countdownInterval) {
-                                countdownInterval = setInterval(updateCountdown, 1000);
-                            }
-                        }
-                    } catch (e) {
-                        console.error("시간 파싱 오류:", e);
+                // 남은 시간 업데이트 
+                const now = new Date();
+                const diffMs = targetDate - now;
+                console.log("시간 차이(ms):", diffMs);
+
+                // 남은 시간이 0이하면 00:00:00으로 표시
+                if (diffMs <= 0) {
+                    const guestRemainingTime = document.getElementById('guest-remaining-time');
+                    if (guestRemainingTime) {
+                        guestRemainingTime.innerText = '00:00:00';
+                    }
+                } else {
+                    console.log("카운트다운 시작");
+                    targetDateTime = targetDate;
+                    updateCountdown();
+                    if (!countdownInterval) {
+                        countdownInterval = setInterval(updateCountdown, 1000);
                     }
                 }
+            } catch (e) {
+                 console.error("시간 파싱 오류:", e);
+            }
+        }
 });
         
     };
