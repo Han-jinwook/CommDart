@@ -770,7 +770,7 @@ socket.on('update_winner', function(data) {
         }, 3000);
     }
 
-    // 당첨자 이름 오버레이 표시 - 새로 추가된 부분
+    // 당첨자 이름 오버레이 표시 - 수정된 부분
     const winnerOverlay = document.getElementById('winner-overlay');
     const winnerNameSpan = document.getElementById('winner-name');
     
@@ -778,14 +778,10 @@ socket.on('update_winner', function(data) {
         winnerNameSpan.innerText = data.winner;
         winnerOverlay.style.display = 'block';
         
-        // 배경색을 당첨자 섹터 색상과 일치시키기 위한 시도
-        const winnerIndex = chart.data.labels.indexOf(data.winner);
-        if (winnerIndex !== -1) {
-            const color = chart.data.datasets[0].backgroundColor[winnerIndex];
-            winnerOverlay.style.backgroundColor = hexToRgba(color, 0.8);
-            winnerOverlay.style.color = '#fff';
-            winnerOverlay.style.textShadow = '1px 1px 2px rgba(0,0,0,0.7)';
-        }
+        // 단순한 스타일 적용
+        winnerOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        winnerOverlay.style.color = '#fff';
+        winnerOverlay.style.textShadow = '0px 0px 5px rgba(255, 255, 255, 0.7)';
         
         // 애니메이션 효과 (크기 확대)
         winnerOverlay.style.animation = 'winner-popup 1s ease-out';
@@ -795,26 +791,10 @@ socket.on('update_winner', function(data) {
             winnerOverlay.style.display = 'none';
         }, 5000);
     }
-
-    // 당첨자 섹터 강조 표시 - 새로 추가된 부분
-    const winnerIndex = chart.data.labels.indexOf(data.winner);
-    if (winnerIndex !== -1 && chart.data && chart.data.datasets && chart.data.datasets[0]) {
-        // 모든 섹터의 투명도 낮추기
-        const originalColors = [...chart.data.datasets[0].backgroundColor];
-        const highlightColors = originalColors.map((color, index) => 
-            index === winnerIndex ? color : hexToRgba(color, 0.3)
-        );
-        
-        chart.data.datasets[0].backgroundColor = highlightColors;
-        chart.update();
-        
-        // 5초 후 원래 색상으로 복원
-        setTimeout(() => {
-            chart.data.datasets[0].backgroundColor = originalColors;
-            chart.update();
-        }, 5000);
-    }
-        
+    
+    // 당첨자 섹터 강조 표시 코드 제거
+    // 이 부분이 차트를 깨뜨릴 가능성이 높으므로 일단 제거
+    
     if (countdownInterval) {
         clearInterval(countdownInterval);
         
