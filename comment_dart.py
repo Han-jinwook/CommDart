@@ -272,21 +272,36 @@ def handle_confirm_winner():
     클라이언트에서 애니메이션이 완료된 후 호출됨
     """
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
+    
+    # 먼저 user_id로 게임 정보 확인
     if user_id in games and games[user_id]['final_winner']:
         winner = games[user_id]['final_winner']
+    # global_game에서도 확인 (추가된 부분)
+    elif 'global_game' in games and games['global_game'].get('final_winner'):
+        winner = games['global_game']['final_winner']
+    # 다른 진행 중인 게임이 있는지 확인 (추가된 부분)
+    else:
+        winner = None
+        # 모든 게임 중 마지막으로 시작된 게임 찾기
+        latest_game = None
+        latest_time = None
+        
+        for gid, game in games.items():
+            if game.get('target_time') and game.get('final_winner'):
+                if latest_time is None or game['target_time'] > latest_time:
+                    latest_time = game['target_time']
+                    latest_game = game
+        
+        if latest_game:
+            winner = latest_game['final_winner']
+    
+    # 당첨자를 찾았으면 발표
+    if winner:
         print(f"DEBUG: 확정된 당첨자: {winner}")
         
-        # 당첨자 정보 전송 (중복 실행 방지)
-        # 이미 update_winner 이벤트가 발생했는지 확인
-        if games[user_id].get('winner_announced', False):
-            print(f"DEBUG: 당첨자가 이미 발표되었습니다: {winner}")
-        else:
-            # 당첨자 발표 표시
-            games[user_id]['winner_announced'] = True
-            
-            # 당첨자 발표와 팡파레를 동시에 전송 (지연 없음)
-            socketio.emit('update_winner', {'winner': winner}, namespace='/')
-            socketio.emit('play_fanfare', namespace='/')
+        # 당첨자 정보 전송
+        socketio.emit('update_winner', {'winner': winner}, namespace='/')
+        socketio.emit('play_fanfare', namespace='/')
     else:
         # 게임 정보가 없거나 당첨자가 설정되지 않은 경우 오류 메시지 전송
         print("ERROR: 당첨자 정보를 찾을 수 없음")
