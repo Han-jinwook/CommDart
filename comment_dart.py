@@ -212,6 +212,9 @@ def handle_start_rotation(data):
 
     # 지속 시간 계산
     duration = (game['target_time'] - now).total_seconds()
+
+    # 총 지속시간도 저장 (추가)
+    game['total_duration'] = duration
     
     # 최종 회전 각도 미리 결정 (720~1440도 사이 랜덤)
     # 정확한 계산을 위해 소수점 자리까지 유지
@@ -315,22 +318,61 @@ def handle_request_game_status():
     print("게임 상태 요청 수신")
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
     
-# 현재 진행 중인 게임이 있는 경우 상태 전송
+    # 현재 진행 중인 게임이 있는지 확인 (global_game이나 다른 게임)
+    active_game = None
+    
     if 'global_game' in games and games['global_game'].get('target_time'):
-        target_time_iso = games['global_game']['target_time'].isoformat()
-        socketio.emit('game_status', {
-            'target_time': target_time_iso,
-            'final_winner': games['global_game'].get('final_winner')
-        }, namespace='/')
+        active_game = games['global_game']
     elif user_id in games and games[user_id].get('target_time'):
-        target_time_iso = games[user_id]['target_time'].isoformat()
-        socketio.emit('game_status', {
-            'target_time': target_time_iso,
-            'final_winner': games[user_id].get('final_winner')
-        }, namespace='/')
+        active_game = games[user_id]
     else:
-        # 진행 중인 게임이 없는 경우 빈 상태 전송
-        socketio.emit('game_status', {}, namespace='/')
+        # 다른 활성 게임 찾기
+        for gid, game in games.items():
+            if game.get('running') and game.get('target_time'):
+                active_game = game
+                break
+    
+    if active_game:
+        now = datetime.datetime.utcnow()
+        target_time = active_game['target_time']
+        
+        # 게임이 아직 진행 중인지 확인
+        if target_time > now:
+            # 남은 시간 계산
+            duration_left = (target_time - now).total_seconds()
+            
+            # 클라이언트에게 게임 상태, 회전 정보, 남은 시간 전송
+            socketio.emit('game_status', {
+                'target_time': target_time.isoformat(),
+                'final_winner': active_game.get('final_winner'),
+                'is_running': active_game.get('running', False),
+                'finalAngle': active_game.get('current_angle', 0),
+                'duration_left': duration_left,
+                'total_duration': active_game.get('total_duration', 0)
+            }, namespace='/')
+            
+            # 진행 중인 게임이 있으므로 start_game 이벤트도 전송
+            socketio.emit('start_game', {
+                'duration': duration_left,
+                'finalAngle': active_game.get('current_angle', 0),
+                'winner': active_game.get('final_winner')
+            }, namespace='/', to=request.sid)  # 요청한 클라이언트에게만 전송
+            
+            print(f"진행 중인 게임 정보 전송: 남은 시간 {duration_left:.2f}초")
+            return
+        else:
+            # 게임이 이미 종료됨 - 결과만 전송
+            socketio.emit('game_status', {
+                'target_time': target_time.isoformat(),
+                'final_winner': active_game.get('final_winner'),
+                'is_running': False
+            }, namespace='/')
+            print("이미 종료된 게임 정보 전송")
+            return
+    
+    # 진행 중인 게임이 없는 경우
+    socketio.emit('game_status', {}, namespace='/')
+    print("진행 중인 게임 없음")
         
 def calculate_winner_at_angle(angle):
     """
