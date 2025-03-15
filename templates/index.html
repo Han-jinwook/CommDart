@@ -590,7 +590,10 @@ function updateCountdown() {
             const isGuestMode = document.getElementById('guest-current-time') !== null;
             if (isGuestMode) {
                 console.log("게스트 모드로 접속, 현재 상태 요청");
-                socket.emit('request_game_status');
+                // 소켓이 아직 연결되지 않았을 수 있으므로 약간의 지연 후 요청
+                setTimeout(function() {
+                    socket.emit('request_game_status');
+                }, 1000);
             }
         });
         
