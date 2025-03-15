@@ -35,18 +35,22 @@
             padding: 20px;
             max-width: 1200px;
         }
-        #chart-container {
-            position: relative;
-            width: 600px;
-            height: 600px;
-            overflow: visible;
-        }
-        #rotating-container {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            transition: none;
-        }
+#chart-container {
+    position: relative;
+    width: 600px;
+    height: 600px;
+    overflow: visible;
+    border: 1px solid #ccc; /* 디버깅용 테두리 추가 */
+    background-color: #f9f9f9; /* 디버깅용 배경색 추가 */
+}
+
+#rotating-container {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    transition: none;
+    background-color: rgba(255, 255, 255, 0.5); /* 디버깅용 배경색 추가 */
+}
         /* 12시 방향 고정 화살표 */
         #pointer {
             position: absolute;
@@ -300,28 +304,49 @@
         }
 
 function initChart() {
+    console.log("차트 초기화 시작");
     try {
-        // 이미 차트가 있으면 파괴
-        if (chart) {
-            chart.destroy();
-        }
-        
-        Chart.register(ChartDataLabels);
-        
-        const ctx = document.getElementById('dart-chart').getContext('2d');
-        if (!ctx) {
-            console.error('차트 컨텍스트를 찾을 수 없습니다.');
+        if (typeof Chart === 'undefined') {
+            console.error("Chart.js 라이브러리를 찾을 수 없습니다.");
             return;
         }
         
-        console.log('차트 초기화 시작...');
+        if (typeof ChartDataLabels === 'undefined') {
+            console.error("ChartDataLabels 플러그인을 찾을 수 없습니다.");
+            // 플러그인이 없어도 일단 차트는 그려보자
+            console.log("플러그인 없이 차트 초기화를 시도합니다.");
+        } else {
+            Chart.register(ChartDataLabels);
+            console.log("ChartDataLabels 플러그인 등록 완료");
+        }
+        
+        const canvas = document.getElementById('dart-chart');
+        if (!canvas) {
+            console.error("'dart-chart' 캔버스 요소를 찾을 수 없습니다.");
+            return;
+        }
+        console.log("캔버스 요소 찾음:", canvas);
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            console.error("캔버스 컨텍스트를 가져올 수 없습니다.");
+            return;
+        }
+        console.log("캔버스 컨텍스트 얻음");
+        
+        // 참가자 데이터 확인
+        const labels = [{% for p in participants %}'{{ p[0] }}',{% endfor %}];
+        const data = [{% for p in participants %}{{ p[1] }},{% endfor %}];
+        console.log("참가자 레이블:", labels);
+        console.log("참가자 데이터:", data);
+        
         chart = new Chart(ctx, {
             type: 'doughnut',
             data: {
-                labels: [{% for p in participants %}'{{ p[0] }}',{% endfor %}],
+                labels: labels,
                 datasets: [{
-                    data: [{% for p in participants %}{{ p[1] }},{% endfor %}],
-                    backgroundColor: generateColors({{ participants|length }})
+                    data: data,
+                    backgroundColor: generateColors(labels.length)
                 }]
             },
             options: {
@@ -352,7 +377,7 @@ function initChart() {
                 radius: '100%'
             }
         });
-        console.log('차트 초기화 완료');
+        console.log("차트 생성 완료");
     } catch(e) {
         console.error("차트 초기화 오류:", e);
         console.error(e.stack);
