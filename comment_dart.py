@@ -234,6 +234,9 @@ def handle_start_rotation(data):
     
     # 게임 상태 업데이트
     game['running'] = True
+
+    # 이 부분 추가: 게임 정보를 'global_game' 키에 복사
+    games['global_game'] = game.copy()
     
     # 클라이언트에게 모든 정보를 한 번에 전송
     socketio.emit('start_game', {
@@ -297,12 +300,12 @@ def handle_request_game_status():
     print("게임 상태 요청 수신")
     user_id = current_user.id if current_user.is_authenticated else 'anonymous'
     
-    # 현재 진행 중인 게임이 있는 경우 상태 전송
-    if 'anonymous' in games and games['anonymous'].get('target_time'):
-        target_time_iso = games['anonymous']['target_time'].isoformat()
+# 현재 진행 중인 게임이 있는 경우 상태 전송
+    if 'global_game' in games and games['global_game'].get('target_time'):
+        target_time_iso = games['global_game']['target_time'].isoformat()
         socketio.emit('game_status', {
             'target_time': target_time_iso,
-            'final_winner': games['anonymous'].get('final_winner')
+            'final_winner': games['global_game'].get('final_winner')
         }, namespace='/')
     elif user_id in games and games[user_id].get('target_time'):
         target_time_iso = games[user_id]['target_time'].isoformat()
