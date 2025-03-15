@@ -883,48 +883,126 @@ socket.on('update_winner', function(data) {
                 document.getElementById('remaining-time').innerText = '--:--:--';
             }
         });
-            socket.on('game_status', function(data) {
-                console.log('게임 상태 수신:', data);
-    
-                // 타겟 시간 설정
-                if (data.target_time) {
-                    try {
-                        const targetDate = new Date(data.target_time);
-                           targetDate.setTime(targetDate.getTime() + (9 * 60 * 60 * 1000)); // +9시간 (한국 시간)
-                        const targetHours = targetDate.getHours().toString().padStart(2, '0');
-                        const targetMinutes = targetDate.getMinutes().toString().padStart(2, '0');
-                        const targetSeconds = targetDate.getSeconds().toString().padStart(2, '0');
-                        const targetTimeString = `${targetHours}:${targetMinutes}:${targetSeconds}`;
-            
-                        const guestTargetTimeDisplay = document.getElementById('guest-target-time-display');
-                        if (guestTargetTimeDisplay) {
-                            guestTargetTimeDisplay.innerText = targetTimeString;
-                            console.log("게스트 슈팅시간 설정:", targetTimeString);
-                        }
-            
-                // 남은 시간 업데이트 
-                const now = new Date();
-                const diffMs = targetDate - now;
-                console.log("시간 차이(ms):", diffMs);
+socket.on('game_status', function(data) {
+    console.log('게임 상태 수신:', data);
 
-                // 남은 시간이 0이하면 00:00:00으로 표시
-                if (diffMs <= 0) {
-                    const guestRemainingTime = document.getElementById('guest-remaining-time');
-                    if (guestRemainingTime) {
-                        guestRemainingTime.innerText = '00:00:00';
-                    }
-                } else {
-                    console.log("카운트다운 시작");
-                    targetDateTime = targetDate;
-                    updateCountdown();
-                    if (!countdownInterval) {
-                        countdownInterval = setInterval(updateCountdown, 1000);
-                    }
-                }
-            } catch (e) {
-                 console.error("시간 파싱 오류:", e);
+    // 타겟 시간 설정
+    if (data.target_time) {
+        try {
+            const targetDate = new Date(data.target_time);
+            targetDate.setTime(targetDate.getTime() + (9 * 60 * 60 * 1000)); // +9시간 (한국 시간)
+            const targetHours = targetDate.getHours().toString().padStart(2, '0');
+            const targetMinutes = targetDate.getMinutes().toString().padStart(2, '0');
+            const targetSeconds = targetDate.getSeconds().toString().padStart(2, '0');
+            const targetTimeString = `${targetHours}:${targetMinutes}:${targetSeconds}`;
+            
+            const guestTargetTimeDisplay = document.getElementById('guest-target-time-display');
+            if (guestTargetTimeDisplay) {
+                guestTargetTimeDisplay.innerText = targetTimeString;
+                console.log("게스트 슈팅시간 설정:", targetTimeString);
             }
+            
+            // 남은 시간 업데이트 
+            const now = new Date();
+            const diffMs = targetDate - now;
+            console.log("시간 차이(ms):", diffMs);
+
+            // 진행 중인 게임이고 회전 정보가 있는 경우
+            if (data.is_running && data.finalAngle && diffMs > 0) {
+                console.log("진행 중인 게임 감지: 원판 회전 시작");
+                
+                // 원판 회전 시작
+                const finalAngle = data.finalAngle;
+                const adjustedFinalAngle = finalAngle + 1; // 각도 조정
+                
+                // 남은 시간으로 애니메이션 속도 조정
+                const duration_left = data.duration_left || (diffMs / 1000);
+                const total_duration = data.total_duration || duration_left;
+                const progress = 1 - (duration_left / total_duration);
+                
+                // 현재 회전 위치 계산
+                const currentAngle = adjustedFinalAngle * progress;
+                
+                console.log("원판 회전 정보:", {
+                    finalAngle: adjustedFinalAngle,
+                    progress: progress,
+                    currentAngle: currentAngle,
+                    남은시간: duration_left
+                });
+                
+                // 중간부터 회전 애니메이션 시작
+                document.getElementById('rotating-container').style.transform = 
+                    `rotate(${currentAngle}deg)`;
+                
+                // 남은 시간 동안 계속 회전
+                const startTime = Date.now();
+                const totalRemainingDuration = duration_left * 1000;
+                const remainingAngle = adjustedFinalAngle - currentAngle;
+                
+                let animationFrameId = null;
+                let animationCompleted = false;
+
+                function animateRemaining() {
+                    const now = Date.now();
+                    const elapsed = now - startTime;
+                    
+                    if (elapsed >= totalRemainingDuration) {
+                        if (!animationCompleted) {
+                            animationCompleted = true;
+                            
+                            document.getElementById('rotating-container').style.transform = 
+                                `rotate(${adjustedFinalAngle}deg)`;
+                            
+                            console.log('애니메이션 완료 (후발 참가자)');
+                            
+                            // 카운트다운 종료
+                            if (countdownInterval) {
+                                clearInterval(countdownInterval);
+                            }
+                        }
+                        return;
+                    }
+                    
+                    const remainingProgress = elapsed / totalRemainingDuration;
+                    const newAngle = currentAngle + (remainingAngle * remainingProgress);
+                    
+                    document.getElementById('rotating-container').style.transform = 
+                        `rotate(${newAngle}deg)`;
+                    
+                    animationFrameId = requestAnimationFrame(animateRemaining);
+                }
+                
+                // 애니메이션 시작
+                animationFrameId = requestAnimationFrame(animateRemaining);
+                
+                // 안전 장치: 남은 시간 + 약간의 여유 시간 후 애니메이션 강제 종료
+                setTimeout(() => {
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                        document.getElementById('rotating-container').style.transform = 
+                            `rotate(${adjustedFinalAngle}deg)`;
+                    }
+                }, totalRemainingDuration + 500);
+            }
+            
+            // 남은 시간이 0이하면 00:00:00으로 표시
+            if (diffMs <= 0) {
+                const guestRemainingTime = document.getElementById('guest-remaining-time');
+                if (guestRemainingTime) {
+                    guestRemainingTime.innerText = '00:00:00';
+                }
+            } else {
+                console.log("카운트다운 시작");
+                targetDateTime = targetDate;
+                updateCountdown();
+                if (!countdownInterval) {
+                    countdownInterval = setInterval(updateCountdown, 1000);
+                }
+            }
+        } catch (e) {
+            console.error("시간 파싱 오류:", e);
         }
+    }
 });
         
     };
