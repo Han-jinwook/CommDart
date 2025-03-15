@@ -722,27 +722,51 @@ function updateCountdown() {
             }, totalDuration + 100);
         });
         
-        socket.on('update_winner', function(data) {
-            stopAllSounds();
-            
-            document.getElementById('winner').innerText = '당첨자: ' + data.winner + '님';
-            if (document.getElementById('start-button')) {
-                document.getElementById('start-button').disabled = false;
+socket.on('update_winner', function(data) {
+    stopAllSounds();
+    
+    // winner 요소 null 체크
+    const winnerElement = document.getElementById('winner');
+    if (winnerElement) {
+        winnerElement.innerText = '당첨자: ' + data.winner + '님';
+    }
+    
+    // start-button 요소는 이미 체크하고 있음
+    if (document.getElementById('start-button')) {
+        document.getElementById('start-button').disabled = false;
+    }
+    
+    // congratulation 요소 null 체크
+    const congratulation = document.getElementById('congratulation');
+    if (congratulation) {
+        congratulation.style.display = 'block';
+        congratulation.classList.add('blink');
+        
+        setTimeout(() => {
+            // setTimeout 내부에서도 다시 확인
+            const congratElement = document.getElementById('congratulation');
+            if (congratElement) {
+                congratElement.classList.remove('blink');
             }
-            
-            const congratulation = document.getElementById('congratulation');
-            congratulation.style.display = 'block';
-            congratulation.classList.add('blink');
-            
-            setTimeout(() => {
-                congratulation.classList.remove('blink');
-            }, 3000);
-            
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-                document.getElementById('remaining-time').innerText = '00:00:00';
-            }
-        });
+        }, 3000);
+    }
+    
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        
+        // remaining-time 요소 null 체크
+        const remainingTimeElement = document.getElementById('remaining-time');
+        if (remainingTimeElement) {
+            remainingTimeElement.innerText = '00:00:00';
+        }
+        
+        // 게스트 모드 remaining-time 요소도 체크
+        const guestRemainingTime = document.getElementById('guest-remaining-time');
+        if (guestRemainingTime) {
+            guestRemainingTime.innerText = '00:00:00';
+        }
+    }
+});
         
         socket.on('play_fanfare', function() {
             console.log("팡파레 재생 요청 수신");
