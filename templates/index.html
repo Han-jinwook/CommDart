@@ -446,10 +446,14 @@
         countdownInterval = setInterval(updateCountdown, 1000);
     }
 
-    // 카운트다운 업데이트 함수
+// 카운트다운 업데이트 함수
 function updateCountdown() {
     if (!targetDateTime) {
-        document.getElementById('remaining-time').innerText = '--:--:--';
+        // 남은시간 표시 요소가 있을 때만 업데이트
+        const remainingTimeElement = document.getElementById('remaining-time');
+        if (remainingTimeElement) {
+            remainingTimeElement.innerText = '--:--:--';
+        }
         const guestRemainingTime = document.getElementById('guest-remaining-time');
         if (guestRemainingTime) {
             guestRemainingTime.innerText = '--:--:--';
@@ -462,7 +466,11 @@ function updateCountdown() {
     
     if (diff <= 0) {
         // 카운트다운 종료
-        document.getElementById('remaining-time').innerText = '00:00:00';
+        // 남은시간 표시 요소가 있을 때만 업데이트
+        const remainingTimeElement = document.getElementById('remaining-time');
+        if (remainingTimeElement) {
+            remainingTimeElement.innerText = '00:00:00';
+        }
         const guestRemainingTime = document.getElementById('guest-remaining-time');
         if (guestRemainingTime) {
             guestRemainingTime.innerText = '00:00:00';
@@ -485,7 +493,11 @@ function updateCountdown() {
     const formattedSeconds = seconds.toString().padStart(2, '0');
     const timeString = `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
     
-    document.getElementById('remaining-time').innerText = timeString;
+    // 남은시간 표시 요소가 있을 때만 업데이트
+    const remainingTimeElement = document.getElementById('remaining-time');
+    if (remainingTimeElement) {
+        remainingTimeElement.innerText = timeString;
+    }
     const guestRemainingTime = document.getElementById('guest-remaining-time');
     if (guestRemainingTime) {
         guestRemainingTime.innerText = timeString;
