@@ -241,6 +241,12 @@ def handle_start_rotation(data):
         'finalAngle': final_angle,
         'winner': winner
     }, namespace='/')
+        
+    # 모든 클라이언트에게 게임 상태 정보 브로드캐스트
+    socketio.emit('game_status', {
+        'target_time': game['target_time'].isoformat(),
+        'final_winner': winner
+    }, namespace='/')
     
     # 비프음 재생
     socketio.emit('play_beep', namespace='/')
@@ -283,6 +289,31 @@ def handle_confirm_winner():
         print("ERROR: 당첨자 정보를 찾을 수 없음")
         socketio.emit('error', {'message': '당첨자 정보를 찾을 수 없습니다.'}, namespace='/')
 
+@socketio.on('request_game_status')
+def handle_request_game_status():
+    """
+    클라이언트(특히 게스트)가 접속했을 때 현재 게임 상태 정보를 요청
+    """
+    print("게임 상태 요청 수신")
+    user_id = current_user.id if current_user.is_authenticated else 'anonymous'
+    
+    # 현재 진행 중인 게임이 있는 경우 상태 전송
+    if 'anonymous' in games and games['anonymous'].get('target_time'):
+        target_time_iso = games['anonymous']['target_time'].isoformat()
+        socketio.emit('game_status', {
+            'target_time': target_time_iso,
+            'final_winner': games['anonymous'].get('final_winner')
+        }, namespace='/')
+    elif user_id in games and games[user_id].get('target_time'):
+        target_time_iso = games[user_id]['target_time'].isoformat()
+        socketio.emit('game_status', {
+            'target_time': target_time_iso,
+            'final_winner': games[user_id].get('final_winner')
+        }, namespace='/')
+    else:
+        # 진행 중인 게임이 없는 경우 빈 상태 전송
+        socketio.emit('game_status', {}, namespace='/')
+        
 def calculate_winner_at_angle(angle):
     """
     특정 각도에서의 당첨자를 계산하는 함수
