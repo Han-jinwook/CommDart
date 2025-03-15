@@ -447,50 +447,51 @@
     }
 
     // 카운트다운 업데이트 함수
-    function updateCountdown() {
-        if (!targetDateTime) {
-            document.getElementById('remaining-time').innerText = '--:--:--';
-            const guestRemainingTime = document.getElementById('guest-remaining-time');
-            if (guestRemainingTime) {
-                guestRemainingTime.innerText = '--:--:--';
-            }
-            return;
-        }
-        
-        const now = new Date();
-        const diff = targetDateTime - now;
-        
-        if (diff <= 0) {
-            // 카운트다운 종료
-            document.getElementById('remaining-time').innerText = '00:00:00';
-            const guestRemainingTime = document.getElementById('guest-remaining-time');
-            if (guestRemainingTime) {
-                guestRemainingTime.innerText = '00:00:00';
-            }
-            clearInterval(countdownInterval);
-            return;
-        }
-        
-        // 시, 분, 초 계산
-        let seconds = Math.floor(diff / 1000);
-        let minutes = Math.floor(seconds / 60);
-        let hours = Math.floor(minutes / 60);
-        
-        seconds %= 60;
-        minutes %= 60;
-        
-        // 표시 형식 포맷팅
-        const formattedHours = hours.toString().padStart(2, '0');
-        const formattedMinutes = minutes.toString().padStart(2, '0');
-        const formattedSeconds = seconds.toString().padStart(2, '0');
-        const timeString = `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
-        
-        document.getElementById('remaining-time').innerText = timeString;
+function updateCountdown() {
+    if (!targetDateTime) {
+        document.getElementById('remaining-time').innerText = '--:--:--';
         const guestRemainingTime = document.getElementById('guest-remaining-time');
         if (guestRemainingTime) {
-            guestRemainingTime.innerText = timeString;
+            guestRemainingTime.innerText = '--:--:--';
         }
+        return;
     }
+    
+    const now = new Date();
+    const diff = targetDateTime - now;
+    
+    if (diff <= 0) {
+        // 카운트다운 종료
+        document.getElementById('remaining-time').innerText = '00:00:00';
+        const guestRemainingTime = document.getElementById('guest-remaining-time');
+        if (guestRemainingTime) {
+            guestRemainingTime.innerText = '00:00:00';
+        }
+        clearInterval(countdownInterval);
+        return;
+    }
+    
+    // 시, 분, 초 계산
+    let seconds = Math.floor(diff / 1000);
+    let minutes = Math.floor(seconds / 60);
+    let hours = Math.floor(minutes / 60);
+    
+    seconds %= 60;
+    minutes %= 60;
+    
+    // 표시 형식 포맷팅
+    const formattedHours = hours.toString().padStart(2, '0');
+    const formattedMinutes = minutes.toString().padStart(2, '0');
+    const formattedSeconds = seconds.toString().padStart(2, '0');
+    const timeString = `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+    
+    document.getElementById('remaining-time').innerText = timeString;
+    const guestRemainingTime = document.getElementById('guest-remaining-time');
+    if (guestRemainingTime) {
+        guestRemainingTime.innerText = timeString;
+        console.log("게스트 남은시간 업데이트:", timeString);
+    }
+}
 
     // 시작 버튼 클릭 함수
     function startRotation() {
@@ -617,6 +618,7 @@
             const guestTargetTimeDisplay = document.getElementById('guest-target-time-display');
             if (guestTargetTimeDisplay) {
                 guestTargetTimeDisplay.innerText = targetTimeString;
+                console.log("게스트 슈팅시간 업데이트:", targetTimeString);
             }
             
             const adjustedFinalAngle = finalAngle + 2;
