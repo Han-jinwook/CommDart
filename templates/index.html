@@ -35,22 +35,21 @@
             padding: 20px;
             max-width: 1200px;
         }
-#chart-container {
-    position: relative;
-    width: 600px;
-    height: 600px;
-    overflow: visible;
-    border: 1px solid #ccc; /* 디버깅용 테두리 추가 */
-    background-color: #f9f9f9; /* 디버깅용 배경색 추가 */
-}
-
-#rotating-container {
-    width: 100%;
-    height: 100%;
-    position: absolute;
-    transition: none;
-    background-color: rgba(255, 255, 255, 0.5); /* 디버깅용 배경색 추가 */
-}
+    #chart-container {
+        position: relative;
+        width: 600px;
+        height: 600px;
+        overflow: visible;
+        background-color: transparent; /* 배경색을 투명하게 */
+    }
+    
+    #rotating-container {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        transition: none;
+        background-color: transparent; /* 배경색을 투명하게 */
+    }
         /* 12시 방향 고정 화살표 */
         #pointer {
             position: absolute;
@@ -546,32 +545,36 @@
         }
         
         // 시간 업데이트 함수 정의
-        function updateTime() {
-            const now = new Date();
-            const hours = now.getHours().toString().padStart(2, '0');
-            const minutes = now.getMinutes().toString().padStart(2, '0');
-            const seconds = now.getSeconds().toString().padStart(2, '0');
-            const timeString = `${hours}:${minutes}:${seconds}`;
-            
-            // 관리자 모드 시간 업데이트
-            document.getElementById('current-time').innerText = timeString;
-            
-            // 게스트 모드 시간 업데이트
-            const guestCurrentTime = document.getElementById('guest-current-time');
-            if (guestCurrentTime) {
-                guestCurrentTime.innerText = timeString;
-            }
-            
-            // 관리자 모드에서만 표시
-            const targetTimeElement = document.getElementById('target-time');
-            if (targetTimeElement && !targetTimeElement.value) {
-                const laterDate = new Date(now.getTime() + 60000); // 현재 시간 + 1분
-                const laterHours = laterDate.getHours().toString().padStart(2, '0');
-                const laterMinutes = laterDate.getMinutes().toString().padStart(2, '0');
-                const laterSeconds = laterDate.getSeconds().toString().padStart(2, '0');
-                targetTimeElement.value = `${laterHours}:${laterMinutes}:${laterSeconds}`;
-            }
-        }
+function updateTime() {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const seconds = now.getSeconds().toString().padStart(2, '0');
+    const timeString = `${hours}:${minutes}:${seconds}`;
+    
+    // 관리자 모드 시간 업데이트
+    const currentTimeElement = document.getElementById('current-time');
+    if (currentTimeElement) {
+        currentTimeElement.innerText = timeString;
+    }
+    
+    // 게스트 모드 시간 업데이트
+    const guestCurrentTime = document.getElementById('guest-current-time');
+    if (guestCurrentTime) {
+        guestCurrentTime.innerText = timeString;
+        console.log("게스트 현재 시간 업데이트:", timeString);
+    }
+    
+    // 관리자 모드에서만 표시 - 기존 코드 유지
+    const targetTimeElement = document.getElementById('target-time');
+    if (targetTimeElement && !targetTimeElement.value) {
+        const laterDate = new Date(now.getTime() + 60000); // 현재 시간 + 1분
+        const laterHours = laterDate.getHours().toString().padStart(2, '0');
+        const laterMinutes = laterDate.getMinutes().toString().padStart(2, '0');
+        const laterSeconds = laterDate.getSeconds().toString().padStart(2, '0');
+        targetTimeElement.value = `${laterHours}:${laterMinutes}:${laterSeconds}`;
+    }
+}
         
         // 초기 시간 업데이트
         updateTime();
@@ -582,6 +585,12 @@
         
         socket.on('connect', function() {
             console.log('서버에 연결되었습니다.');
+             // 게스트 모드인지 확인하고 상태 요청 - 이 부분 추가
+            const isGuestMode = document.getElementById('guest-current-time') !== null;
+            if (isGuestMode) {
+                console.log("게스트 모드로 접속, 현재 상태 요청");
+                socket.emit('request_game_status');
+            }
         });
         
         socket.on('disconnect', function() {
@@ -767,7 +776,36 @@
                 document.getElementById('remaining-time').innerText = '--:--:--';
             }
         });
-    };
+        // 서버로부터 게임 상태 수신 처리 추가
+socket.on('game_status', function(data) {
+    console.log('게임 상태 수신:', data);
+    
+    // 타겟 시간 설정
+    if (data.target_time) {
+        const targetDate = new Date(data.target_time);
+        const targetHours = targetDate.getHours().toString().padStart(2, '0');
+        const targetMinutes = targetDate.getMinutes().toString().padStart(2, '0');
+        const targetSeconds = targetDate.getSeconds().toString().padStart(2, '0');
+        const targetTimeString = `${targetHours}:${targetMinutes}:${targetSeconds}`;
+        
+        const guestTargetTimeDisplay = document.getElementById('guest-target-time-display');
+        if (guestTargetTimeDisplay) {
+            guestTargetTimeDisplay.innerText = targetTimeString;
+        }
+        
+        // 남은 시간 업데이트
+        const now = new Date();
+        const diffMs = targetDate - now;
+        if (diffMs > 0) {
+            targetDateTime = targetDate;
+            updateCountdown();
+            if (!countdownInterval) {
+                countdownInterval = setInterval(updateCountdown, 1000);
+            }
+        }
+    }
+});
+        
 </script>
 </body>
 </html>
