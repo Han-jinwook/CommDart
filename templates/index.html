@@ -586,6 +586,12 @@ function updateCountdown() {
         
         socket.on('connect', function() {
             console.log('서버에 연결되었습니다.');
+            // 게스트 모드인지 확인하고 게임 상태 요청
+            const isGuestMode = document.getElementById('guest-current-time') !== null;
+            if (isGuestMode) {
+                console.log("게스트 모드로 접속, 현재 상태 요청");
+                socket.emit('request_game_status');
+            }
         });
         
         socket.on('disconnect', function() {
@@ -772,6 +778,40 @@ function updateCountdown() {
                 document.getElementById('remaining-time').innerText = '--:--:--';
             }
         });
+            socket.on('game_status', function(data) {
+                console.log('게임 상태 수신:', data);
+    
+                // 타겟 시간 설정
+                if (data.target_time) {
+                    try {
+                        const targetDate = new Date(data.target_time);
+                        const targetHours = targetDate.getHours().toString().padStart(2, '0');
+                        const targetMinutes = targetDate.getMinutes().toString().padStart(2, '0');
+                        const targetSeconds = targetDate.getSeconds().toString().padStart(2, '0');
+                        const targetTimeString = `${targetHours}:${targetMinutes}:${targetSeconds}`;
+            
+                        const guestTargetTimeDisplay = document.getElementById('guest-target-time-display');
+                        if (guestTargetTimeDisplay) {
+                            guestTargetTimeDisplay.innerText = targetTimeString;
+                            console.log("게스트 슈팅시간 설정:", targetTimeString);
+                        }
+            
+                        // 남은 시간 업데이트
+                        const now = new Date();
+                        const diffMs = targetDate - now;
+                        if (diffMs > 0) {
+                            targetDateTime = targetDate;
+                            updateCountdown();
+                            if (!countdownInterval) {
+                                countdownInterval = setInterval(updateCountdown, 1000);
+                            }
+                        }
+                    } catch (e) {
+                        console.error("시간 파싱 오류:", e);
+                    }
+                }
+});
+        
     };
 </script>
 </body>
