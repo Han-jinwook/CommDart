@@ -770,7 +770,7 @@ socket.on('start_game', function(data) {
     const targetSeconds = targetDate.getSeconds().toString().padStart(2, '0');
     const targetTimeString = `${targetHours}:${targetMinutes}:${targetSeconds}`;
 
-    // 타겟 시간 표시 업데이트 - 수정된 부분
+    // 타겟 시간 표시 업데이트
     const targetTimeDisplay = document.getElementById('target-time-display');
     if (targetTimeDisplay) {
         targetTimeDisplay.innerText = targetTimeString;
