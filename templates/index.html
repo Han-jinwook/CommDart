@@ -221,21 +221,22 @@
 
 <!-- 게스트 모드용 시간 표시 -->
 <div id="time-controls" class="guest-mode">
-    <div style="text-align: center; font-weight: bold; margin-bottom: 10px;">게스트 모드로 관람 중입니다</div>
-    <div style="display: flex; justify-content: center; flex-wrap: wrap;">
-        <div class="time-control-item">
-            <span class="time-label">현재시간:</span>
-            <span id="guest-current-time" class="time-value"></span>
-        </div>
-        <div class="time-control-item">
-            <span class="time-label">남은시간:</span>
-            <span id="guest-remaining-time" class="time-value">--:--:--</span>
-        </div>
-        <div class="time-control-item">
-            <span class="time-label">슈팅시간:</span>
-            <span id="guest-target-time-display" class="time-value">--:--:--</span>
-        </div>
+    <div class="time-control-item" style="margin-right: auto;">
+        <span style="font-weight: bold;">게스트 모드로 관람 중입니다</span>
     </div>
+    <div class="time-control-item">
+        <span class="time-label">슈팅시간:</span>
+        <span id="guest-target-time-display" class="time-value">--:--:--</span>
+    </div>
+    <div class="time-control-item">
+        <span class="time-label">남은시간:</span>
+        <span id="guest-remaining-time" class="time-value">--:--:--</span>
+    </div>
+    <div class="time-control-item">
+        <span class="time-label">현재시간:</span>
+        <span id="guest-current-time" class="time-value"></span>
+    </div>
+</div>
 </div>
 {% endif %}
         
