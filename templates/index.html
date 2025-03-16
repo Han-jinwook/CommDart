@@ -739,39 +739,38 @@ function animate() {
         return;
     }
     
-    // 초당 회전 각도를 직접 설정 (일정한 회전 속도)
-    const DEGREES_PER_SECOND = 150; // 초당 150도 회전 (약 0.4바퀴)
+    // 초당 회전 각도 설정
+    const DEGREES_PER_SECOND = 100; // 초당 100도 회전 (1초에 약 0.28바퀴)
     
-    // 경과 시간(초)에 비례하여 회전
-    let currentRotation = (elapsed / 1000) * DEGREES_PER_SECOND;
+    // 균일한 회전 + 최종 각도로의 부드러운 전환을 위한 설정
+    const basicRotation = (elapsed / 1000) * DEGREES_PER_SECOND; // 기본 회전 (시간에 비례)
     
-    // 초과 회전 방지 (이건 선택사항)
-    const MAX_ROTATIONS = 10; // 최대 10바퀴까지만 회전
-    if (currentRotation > MAX_ROTATIONS * 360) {
-        currentRotation = MAX_ROTATIONS * 360;
+    // 최종 위치로 전환 시작 시점 (마지막 3초)
+    const TRANSITION_DURATION = 3000; // 3초 동안 전환
+    const transitionStart = totalDuration - TRANSITION_DURATION;
+    
+    let currentRotation;
+    
+    if (elapsed < transitionStart) {
+        // 처음부터 전환 시작 전까지는 일정 속도로 회전
+        currentRotation = basicRotation;
+    } else {
+        // 전환 시작부터 끝까지
+        const transitionElapsed = elapsed - transitionStart;
+        const transitionProgress = transitionElapsed / TRANSITION_DURATION;
+        
+        // 전환 시작 시점의 회전 각도
+        const startRotation = (transitionStart / 1000) * DEGREES_PER_SECOND;
+        
+        // easeOutCubic 이징 함수 적용
+        const easeOut = 1 - Math.pow(1 - transitionProgress, 3);
+        
+        // 현재 회전과 최종 회전 사이를 보간
+        currentRotation = startRotation * (1 - easeOut) + adjustedFinalAngle * easeOut;
     }
     
-    // 시간에 따른 자연스러운 랜덤성 추가 (약간의 변동성)
-    // 시간이 지남에 따라 약간의 요동을 줘서 자연스럽게 보이도록 함
-    const timeOffset = (Math.sin(elapsed / 500) * 5); // 시간에 따라 -5~5도 변동
-    
-    // 최종 회전 각도와 상관없이 일정 속도로 계속 회전
     document.getElementById('rotating-container').style.transform = 
-        `rotate(${currentRotation + timeOffset}deg)`;
-    
-    // 종료 직전 5% 시간에서는 최종 각도를 준비
-    if (elapsed > totalDuration * 0.95) {
-        // 남은 시간 비율 (0->1)
-        const remainingRatio = (totalDuration - elapsed) / (totalDuration * 0.05);
-        
-        // 현재 회전 위치와 최종 위치 사이를 선형 보간
-        // remainingRatio가 0에 가까워질수록 최종 각도에 가까워짐
-        const blendedRotation = currentRotation * remainingRatio + 
-                               adjustedFinalAngle * (1 - remainingRatio);
-        
-        document.getElementById('rotating-container').style.transform = 
-            `rotate(${blendedRotation}deg)`;
-    }
+        `rotate(${currentRotation}deg)`;
     
     animationFrameId = requestAnimationFrame(animate);
 }
