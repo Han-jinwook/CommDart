@@ -712,6 +712,11 @@ socket.on('start_game', function(data) {
     let currentRotation = 0; // 현재 회전 각도
     let animationFrameId = null;
     let animationCompleted = false;
+    
+    // 이 클라이언트에만 고유한 애니메이션 ID를 생성
+    // 이렇게 하면 각 클라이언트가 자신만의 애니메이션을 가지게 됨
+    const clientAnimationId = Date.now() + Math.random().toString(36).substring(2, 9);
+    console.log("클라이언트 애니메이션 ID:", clientAnimationId);
 
     function animate() {
         const now = Date.now();
@@ -746,37 +751,27 @@ socket.on('start_game', function(data) {
             currentRotation = currentRotation % 360;
         }
         
-        // 남은 시간 비율 계산
-        const remainingRatio = 1 - (elapsed / totalWaitDuration);
+        // 일정한 속도로 회전 - 감속 효과 제거
+        document.getElementById('rotating-container').style.transform = 
+            `rotate(${currentRotation}deg)`;
         
-        // 종료 직전 3초 동안은 서서히 최종 각도로 전환
-        const TRANSITION_PERIOD = 3000; // 3초
-        if (elapsed > totalWaitDuration - TRANSITION_PERIOD) {
-            // 전환 기간 내 진행도 (0~1)
-            const transitionProgress = (elapsed - (totalWaitDuration - TRANSITION_PERIOD)) / TRANSITION_PERIOD;
-            
-            // 현재 회전과 최종 회전 사이 보간
-            const blendedRotation = (1 - transitionProgress) * currentRotation + transitionProgress * adjustedFinalAngle;
-            
-            document.getElementById('rotating-container').style.transform = 
-                `rotate(${blendedRotation}deg)`;
-        } else {
-            // 일반 회전
-            document.getElementById('rotating-container').style.transform = 
-                `rotate(${currentRotation}deg)`;
-        }
-        
-        animationFrameId = requestAnimationFrame(animate);
+        // 현재 애니메이션 ID로 다음 프레임 요청
+        // 다른 클라이언트의 애니메이션과 충돌하지 않음
+        window['animFrame_' + clientAnimationId] = requestAnimationFrame(animate);
     }
     
     // 애니메이션 시작
-    animationFrameId = requestAnimationFrame(animate);
+    window['animFrame_' + clientAnimationId] = requestAnimationFrame(animate);
     
-    // 안전장치: 실제 대기 시간이 지난 후 최종 처리
+    // 종료 직전에는 서버에서 설정한 최종 위치로 즉시 이동
     setTimeout(() => {
         if (!animationCompleted) {
-            cancelAnimationFrame(animationFrameId);
+            if (window['animFrame_' + clientAnimationId]) {
+                cancelAnimationFrame(window['animFrame_' + clientAnimationId]);
+                delete window['animFrame_' + clientAnimationId];
+            }
             
+            // 추가 애니메이션 없이 즉시 최종 위치로 이동
             document.getElementById('rotating-container').style.transform = 
                 `rotate(${adjustedFinalAngle}deg)`;
             
@@ -784,9 +779,125 @@ socket.on('start_game', function(data) {
             
             socket.emit('confirm_winner');
             
-            console.log('백업 타이머로 애니메이션 종료');
+            console.log('백업 타이머로 애니메이션 종료:', clientAnimationId);
         }
     }, totalWaitDuration + 100);
+});
+
+// game_status 이벤트 핸들러도 수정해야 함
+socket.on('game_status', function(data) {
+    console.log('게임 상태 수신:', data);
+
+    // 타겟 시간 설정
+    if (data.target_time) {
+        try {
+            const targetDate = new Date(data.target_time);
+            targetDate.setTime(targetDate.getTime() + (9 * 60 * 60 * 1000)); // +9시간 (한국 시간)
+            const targetHours = targetDate.getHours().toString().padStart(2, '0');
+            const targetMinutes = targetDate.getMinutes().toString().padStart(2, '0');
+            const targetSeconds = targetDate.getSeconds().toString().padStart(2, '0');
+            const targetTimeString = `${targetHours}:${targetMinutes}:${targetSeconds}`;
+            
+            const guestTargetTimeDisplay = document.getElementById('guest-target-time-display');
+            if (guestTargetTimeDisplay) {
+                guestTargetTimeDisplay.innerText = targetTimeString;
+                console.log("게스트 슈팅시간 설정:", targetTimeString);
+            }
+            
+            // 남은 시간 업데이트 
+            const now = new Date();
+            const diffMs = targetDate - now;
+            console.log("시간 차이(ms):", diffMs);
+
+            // 진행 중인 게임이고 회전 정보가 있는 경우
+            if (data.is_running && data.finalAngle && diffMs > 0) {
+                console.log("진행 중인 게임 감지: 원판 회전 시작");
+                
+                // 일정한 속도로 회전하기 위한 설정
+                const ROTATION_SPEED = 0.1; // 밀리초당 0.1도 회전
+                const finalAngle = data.finalAngle;
+                const adjustedFinalAngle = finalAngle + 1.4;
+                
+                // 남은 시간 계산
+                const duration_left = data.duration_left || (diffMs / 1000);
+                const totalWaitDuration = duration_left * 1000;
+                
+                let currentRotation = 0;
+                const startTime = Date.now();
+                let animationCompleted = false;
+                
+                // 이 클라이언트에만 고유한 애니메이션 ID를 생성
+                const clientAnimationId = Date.now() + Math.random().toString(36).substring(2, 9);
+                console.log("게스트 애니메이션 ID:", clientAnimationId);
+                
+                function animateGuest() {
+                    const now = Date.now();
+                    const elapsed = now - startTime;
+                    
+                    if (elapsed >= totalWaitDuration) {
+                        if (!animationCompleted) {
+                            animationCompleted = true;
+                            
+                            document.getElementById('rotating-container').style.transform = 
+                                `rotate(${adjustedFinalAngle}deg)`;
+                            
+                            console.log('게스트 애니메이션 완료:', clientAnimationId);
+                        }
+                        return;
+                    }
+                    
+                    // 일정한 속도로 회전
+                    currentRotation += ROTATION_SPEED * 16;
+                    
+                    // 회전 값이 너무 커지지 않도록 조절
+                    if (currentRotation > 3600) {
+                        currentRotation = currentRotation % 360;
+                    }
+                    
+                    document.getElementById('rotating-container').style.transform = 
+                        `rotate(${currentRotation}deg)`;
+                    
+                    // 고유한 ID로 다음 프레임 요청
+                    window['guestAnimFrame_' + clientAnimationId] = requestAnimationFrame(animateGuest);
+                }
+                
+                // 애니메이션 시작 (게스트용)
+                window['guestAnimFrame_' + clientAnimationId] = requestAnimationFrame(animateGuest);
+                
+                // 안전장치: 실제 대기 시간 후 최종 처리
+                setTimeout(() => {
+                    if (!animationCompleted) {
+                        if (window['guestAnimFrame_' + clientAnimationId]) {
+                            cancelAnimationFrame(window['guestAnimFrame_' + clientAnimationId]);
+                            delete window['guestAnimFrame_' + clientAnimationId];
+                        }
+                        
+                        document.getElementById('rotating-container').style.transform = 
+                            `rotate(${adjustedFinalAngle}deg)`;
+                        
+                        console.log('게스트 백업 타이머로 애니메이션 종료:', clientAnimationId);
+                    }
+                }, totalWaitDuration + 100);
+            }
+            
+            // 남은 시간이 0이하면 00:00:00으로 표시
+            if (diffMs <= 0) {
+                const guestRemainingTime = document.getElementById('guest-remaining-time');
+                if (guestRemainingTime) {
+                    guestRemainingTime.innerText = '00:00:00';
+                }
+            } else {
+                console.log("카운트다운 시작");
+                targetDateTime = targetDate;
+                updateCountdown();
+                if (!countdownInterval) {
+                    countdownInterval = setInterval(updateCountdown, 1000);
+                }
+            }
+        } catch (e) {
+            console.error("시간 파싱 오류:", e);
+        }
+    }
 });
         
 socket.on('update_winner', function(data) {
