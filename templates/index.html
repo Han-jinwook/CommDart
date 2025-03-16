@@ -668,8 +668,8 @@ socket.on('start_game', function(data) {
     const finalAngle = data.finalAngle;
     const winner = data.winner;
     
-    // 룰렛 회전 속도 (밀리초당 도수)
-    const ROTATION_SPEED = 0.1; // 밀리초당 0.1도 회전 (1초에 100도, 약 0.28바퀴)
+    // 룰렛 회전 속도 (밀리초당 도수) - 0.03으로 감소 (1초에 약 30도 회전, 매우 느림)
+    const ROTATION_SPEED = 0.03; // 밀리초당 0.03도 회전
     
     // 타겟 시간 계산 (서버로부터 받은 정보로 계산)
     const now = new Date();
@@ -710,13 +710,13 @@ socket.on('start_game', function(data) {
     const totalWaitDuration = serverDuration * 1000; // 실제 대기 시간 (밀리초)
     
     let currentRotation = 0; // 현재 회전 각도
-    let animationFrameId = null;
     let animationCompleted = false;
     
-    // 이 클라이언트에만 고유한 애니메이션 ID를 생성
-    // 이렇게 하면 각 클라이언트가 자신만의 애니메이션을 가지게 됨
-    const clientAnimationId = Date.now() + Math.random().toString(36).substring(2, 9);
-    console.log("클라이언트 애니메이션 ID:", clientAnimationId);
+    // 이미 실행 중인 애니메이션이 있으면 정리
+    if (window.currentAnimationFrame) {
+        cancelAnimationFrame(window.currentAnimationFrame);
+        window.currentAnimationFrame = null;
+    }
 
     function animate() {
         const now = Date.now();
@@ -727,7 +727,8 @@ socket.on('start_game', function(data) {
             if (!animationCompleted) {
                 animationCompleted = true;
                 
-                // 최종 회전 각도로 설정
+                // 최종 회전 각도로 설정 - CSS transition 사용하지 않음
+                document.getElementById('rotating-container').style.transition = 'none';
                 document.getElementById('rotating-container').style.transform = 
                     `rotate(${adjustedFinalAngle}deg)`;
                 
@@ -743,35 +744,39 @@ socket.on('start_game', function(data) {
             return;
         }
         
-        // 일정한 속도로 계속 회전
-        currentRotation += ROTATION_SPEED * 16; // 약 16ms마다 프레임 갱신 가정
+        // 일정한 속도로 계속 회전 - 약간 가속 효과 추가
+        const progress = elapsed / totalWaitDuration;
+        const speedFactor = 1.0 + (progress * 0.5); // 최대 50% 가속 (시간이 지날수록 살짝 빨라짐)
+        
+        currentRotation += ROTATION_SPEED * speedFactor * 16; // 16ms 동안의 회전량
         
         // 회전 값이 너무 커지지 않도록 조절 (성능 문제 방지)
         if (currentRotation > 3600) {
             currentRotation = currentRotation % 360;
         }
         
-        // 일정한 속도로 회전 - 감속 효과 제거
+        // 설정된 CSS transition 제거하고 직접 회전 적용
+        document.getElementById('rotating-container').style.transition = 'none';
         document.getElementById('rotating-container').style.transform = 
             `rotate(${currentRotation}deg)`;
         
-        // 현재 애니메이션 ID로 다음 프레임 요청
-        // 다른 클라이언트의 애니메이션과 충돌하지 않음
-        window['animFrame_' + clientAnimationId] = requestAnimationFrame(animate);
+        // 현재 애니메이션 ID 전역 변수에 저장
+        window.currentAnimationFrame = requestAnimationFrame(animate);
     }
     
-    // 애니메이션 시작
-    window['animFrame_' + clientAnimationId] = requestAnimationFrame(animate);
+    // 애니메이션 시작 - 전역 변수에 ID 저장
+    window.currentAnimationFrame = requestAnimationFrame(animate);
     
-    // 종료 직전에는 서버에서 설정한 최종 위치로 즉시 이동
+    // 안전장치: 시간이 끝나면 애니메이션 완료 처리
     setTimeout(() => {
         if (!animationCompleted) {
-            if (window['animFrame_' + clientAnimationId]) {
-                cancelAnimationFrame(window['animFrame_' + clientAnimationId]);
-                delete window['animFrame_' + clientAnimationId];
+            if (window.currentAnimationFrame) {
+                cancelAnimationFrame(window.currentAnimationFrame);
+                window.currentAnimationFrame = null;
             }
             
-            // 추가 애니메이션 없이 즉시 최종 위치로 이동
+            // 즉시 최종 위치로 이동
+            document.getElementById('rotating-container').style.transition = 'none';
             document.getElementById('rotating-container').style.transform = 
                 `rotate(${adjustedFinalAngle}deg)`;
             
@@ -779,9 +784,136 @@ socket.on('start_game', function(data) {
             
             socket.emit('confirm_winner');
             
-            console.log('백업 타이머로 애니메이션 종료:', clientAnimationId);
+            console.log('백업 타이머로 애니메이션 종료');
         }
     }, totalWaitDuration + 100);
+});
+
+// game_status 이벤트 핸들러도 수정
+socket.on('game_status', function(data) {
+    console.log('게임 상태 수신:', data);
+
+    // 타겟 시간 설정
+    if (data.target_time) {
+        try {
+            const targetDate = new Date(data.target_time);
+            targetDate.setTime(targetDate.getTime() + (9 * 60 * 60 * 1000)); // +9시간 (한국 시간)
+            const targetHours = targetDate.getHours().toString().padStart(2, '0');
+            const targetMinutes = targetDate.getMinutes().toString().padStart(2, '0');
+            const targetSeconds = targetDate.getSeconds().toString().padStart(2, '0');
+            const targetTimeString = `${targetHours}:${targetMinutes}:${targetSeconds}`;
+            
+            const guestTargetTimeDisplay = document.getElementById('guest-target-time-display');
+            if (guestTargetTimeDisplay) {
+                guestTargetTimeDisplay.innerText = targetTimeString;
+                console.log("게스트 슈팅시간 설정:", targetTimeString);
+            }
+            
+            // 남은 시간 업데이트 
+            const now = new Date();
+            const diffMs = targetDate - now;
+            console.log("시간 차이(ms):", diffMs);
+
+            // 진행 중인 게임이고 회전 정보가 있는 경우
+            if (data.is_running && data.finalAngle && diffMs > 0) {
+                console.log("진행 중인 게임 감지: 원판 회전 시작");
+                
+                // 이미 실행 중인 게스트 애니메이션이 있으면 취소
+                if (window.currentGuestAnimationFrame) {
+                    cancelAnimationFrame(window.currentGuestAnimationFrame);
+                    window.currentGuestAnimationFrame = null;
+                }
+                
+                // 룰렛 회전 속도 (밀리초당 도수) - 더 느리게 설정
+                const ROTATION_SPEED = 0.03; // 밀리초당 0.03도 회전
+                const finalAngle = data.finalAngle;
+                const adjustedFinalAngle = finalAngle + 1.4;
+                
+                // 남은 시간 계산
+                const duration_left = data.duration_left || (diffMs / 1000);
+                const totalWaitDuration = duration_left * 1000;
+                
+                let currentRotation = 0;
+                const startTime = Date.now();
+                let animationCompleted = false;
+                
+                function animateGuest() {
+                    const now = Date.now();
+                    const elapsed = now - startTime;
+                    
+                    if (elapsed >= totalWaitDuration) {
+                        if (!animationCompleted) {
+                            animationCompleted = true;
+                            
+                            // CSS transition 제거하고 직접 회전 적용
+                            document.getElementById('rotating-container').style.transition = 'none';
+                            document.getElementById('rotating-container').style.transform = 
+                                `rotate(${adjustedFinalAngle}deg)`;
+                            
+                            console.log('게스트 애니메이션 완료');
+                        }
+                        return;
+                    }
+                    
+                    // 일정한 속도로 회전 - 약간 가속 효과 추가
+                    const progress = elapsed / totalWaitDuration;
+                    const speedFactor = 1.0 + (progress * 0.5); // 최대 50% 가속
+                    
+                    currentRotation += ROTATION_SPEED * speedFactor * 16;
+                    
+                    // 회전 값이 너무 커지지 않도록 조절
+                    if (currentRotation > 3600) {
+                        currentRotation = currentRotation % 360;
+                    }
+                    
+                    // CSS transition 제거하고 직접 회전 적용
+                    document.getElementById('rotating-container').style.transition = 'none';
+                    document.getElementById('rotating-container').style.transform = 
+                        `rotate(${currentRotation}deg)`;
+                    
+                    // 다음 프레임 요청
+                    window.currentGuestAnimationFrame = requestAnimationFrame(animateGuest);
+                }
+                
+                // 애니메이션 시작 (게스트용)
+                window.currentGuestAnimationFrame = requestAnimationFrame(animateGuest);
+                
+                // 안전장치: 실제 대기 시간 후 최종 처리
+                setTimeout(() => {
+                    if (!animationCompleted) {
+                        if (window.currentGuestAnimationFrame) {
+                            cancelAnimationFrame(window.currentGuestAnimationFrame);
+                            window.currentGuestAnimationFrame = null;
+                        }
+                        
+                        // CSS transition 제거하고 직접 회전 적용
+                        document.getElementById('rotating-container').style.transition = 'none';
+                        document.getElementById('rotating-container').style.transform = 
+                            `rotate(${adjustedFinalAngle}deg)`;
+                        
+                        console.log('게스트 백업 타이머로 애니메이션 종료');
+                    }
+                }, totalWaitDuration + 100);
+            }
+            
+            // 남은 시간이 0이하면 00:00:00으로 표시
+            if (diffMs <= 0) {
+                const guestRemainingTime = document.getElementById('guest-remaining-time');
+                if (guestRemainingTime) {
+                    guestRemainingTime.innerText = '00:00:00';
+                }
+            } else {
+                console.log("카운트다운 시작");
+                targetDateTime = targetDate;
+                updateCountdown();
+                if (!countdownInterval) {
+                    countdownInterval = setInterval(updateCountdown, 1000);
+                }
+            }
+        } catch (e) {
+            console.error("시간 파싱 오류:", e);
+        }
+    }
 });
 
 // game_status 이벤트 핸들러도 수정해야 함
