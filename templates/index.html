@@ -713,67 +713,40 @@ function updateCountdown() {
             let animationFrameId = null;
             let animationCompleted = false;
 
-// socket.on('start_game') 함수 내의 animate 함수 부분을 아래 코드로 교체
-
-function animate() {
-    const now = Date.now();
-    const elapsed = now - startTime;
-    
-    // 애니메이션 종료 여부 확인
-    if (elapsed >= totalDuration) {
-        if (!animationCompleted) {
-            animationCompleted = true;
+            function animate() {
+                const now = Date.now();
+                const elapsed = now - startTime;
+                
+                if (elapsed >= totalDuration) {
+                    if (!animationCompleted) {
+                        animationCompleted = true;
+                        
+                        document.getElementById('rotating-container').style.transform = 
+                            `rotate(${adjustedFinalAngle}deg)`;
+                        
+                        console.log('애니메이션 완료:', {
+                            adjustedFinalAngle: adjustedFinalAngle + '도',
+                            elapsedTime: (elapsed / 1000).toFixed(2) + '초'
+                        });
+                        
+                        stopBeepLoop();
+                        
+                        socket.emit('confirm_winner');
+                    }
+                    return;
+                }
+                
+                const progress = elapsed / totalDuration;
+                
+                const currentAngle = adjustedFinalAngle * progress;
+                
+                document.getElementById('rotating-container').style.transform = 
+                    `rotate(${currentAngle}deg)`;
+                
+                animationFrameId = requestAnimationFrame(animate);
+            }
             
-            document.getElementById('rotating-container').style.transform = 
-                `rotate(${adjustedFinalAngle}deg)`;
-            
-            console.log('애니메이션 완료:', {
-                adjustedFinalAngle: adjustedFinalAngle + '도',
-                elapsedTime: (elapsed / 1000).toFixed(2) + '초'
-            });
-            
-            stopBeepLoop();
-            
-            socket.emit('confirm_winner');
-        }
-        return;
-    }
-    
-    // 초당 회전 각도 설정
-    const DEGREES_PER_SECOND = 100; // 초당 100도 회전 (1초에 약 0.28바퀴)
-    
-    // 균일한 회전 + 최종 각도로의 부드러운 전환을 위한 설정
-    const basicRotation = (elapsed / 1000) * DEGREES_PER_SECOND; // 기본 회전 (시간에 비례)
-    
-    // 최종 위치로 전환 시작 시점 (마지막 3초)
-    const TRANSITION_DURATION = 3000; // 3초 동안 전환
-    const transitionStart = totalDuration - TRANSITION_DURATION;
-    
-    let currentRotation;
-    
-    if (elapsed < transitionStart) {
-        // 처음부터 전환 시작 전까지는 일정 속도로 회전
-        currentRotation = basicRotation;
-    } else {
-        // 전환 시작부터 끝까지
-        const transitionElapsed = elapsed - transitionStart;
-        const transitionProgress = transitionElapsed / TRANSITION_DURATION;
-        
-        // 전환 시작 시점의 회전 각도
-        const startRotation = (transitionStart / 1000) * DEGREES_PER_SECOND;
-        
-        // easeOutCubic 이징 함수 적용
-        const easeOut = 1 - Math.pow(1 - transitionProgress, 3);
-        
-        // 현재 회전과 최종 회전 사이를 보간
-        currentRotation = startRotation * (1 - easeOut) + adjustedFinalAngle * easeOut;
-    }
-    
-    document.getElementById('rotating-container').style.transform = 
-        `rotate(${currentRotation}deg)`;
-    
-    animationFrameId = requestAnimationFrame(animate);
-}
+            animationFrameId = requestAnimationFrame(animate);
             
             setTimeout(() => {
                 if (!animationCompleted) {
