@@ -713,38 +713,47 @@ function updateCountdown() {
             let animationFrameId = null;
             let animationCompleted = false;
 
-            function animate() {
-                const now = Date.now();
-                const elapsed = now - startTime;
-                
-                if (elapsed >= totalDuration) {
-                    if (!animationCompleted) {
-                        animationCompleted = true;
-                        
-                        document.getElementById('rotating-container').style.transform = 
-                            `rotate(${adjustedFinalAngle}deg)`;
-                        
-                        console.log('애니메이션 완료:', {
-                            adjustedFinalAngle: adjustedFinalAngle + '도',
-                            elapsedTime: (elapsed / 1000).toFixed(2) + '초'
-                        });
-                        
-                        stopBeepLoop();
-                        
-                        socket.emit('confirm_winner');
-                    }
-                    return;
-                }
-                
-                const progress = elapsed / totalDuration;
-                
-                const currentAngle = adjustedFinalAngle * progress;
-                
-                document.getElementById('rotating-container').style.transform = 
-                    `rotate(${currentAngle}deg)`;
-                
-                animationFrameId = requestAnimationFrame(animate);
-            }
+function animate() {
+    const now = Date.now();
+    const elapsed = now - startTime;
+    
+    if (elapsed >= totalDuration) {
+        if (!animationCompleted) {
+            animationCompleted = true;
+            
+            document.getElementById('rotating-container').style.transform = 
+                `rotate(${adjustedFinalAngle}deg)`;
+            
+            console.log('애니메이션 완료:', {
+                adjustedFinalAngle: adjustedFinalAngle + '도',
+                elapsedTime: (elapsed / 1000).toFixed(2) + '초'
+            });
+            
+            stopBeepLoop();
+            
+            socket.emit('confirm_winner');
+        }
+        return;
+    }
+    
+    // 수정된 부분: 일정한 속도로 회전
+    if (!window.currentRotation) {
+        window.currentRotation = 0;
+    }
+    
+    // 일정 속도 회전 (0.3도/밀리초 = 초당 300도 = 초당 약 0.83바퀴)
+    window.currentRotation += 0.3 * 16; // 16ms마다 업데이트 가정
+    
+    // 값이 너무 커지지 않도록 360도 초과 시 리셋
+    if (window.currentRotation > 3600) {
+        window.currentRotation = window.currentRotation % 360;
+    }
+    
+    document.getElementById('rotating-container').style.transform = 
+        `rotate(${window.currentRotation}deg)`;
+    
+    animationFrameId = requestAnimationFrame(animate);
+}
             
             animationFrameId = requestAnimationFrame(animate);
             
