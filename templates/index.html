@@ -739,47 +739,42 @@ function animate() {
         return;
     }
     
-    // 총 시간 중 진행된 비율 (0~1)
-    const progress = elapsed / totalDuration;
+    // 초당 회전 각도를 직접 설정 (일정한 회전 속도)
+    const DEGREES_PER_SECOND = 150; // 초당 150도 회전 (약 0.4바퀴)
     
-    // 감속 시작 시점 (전체 시간의 80%부터 감속 시작)
-    const DECELERATION_START = 0.8;
+    // 경과 시간(초)에 비례하여 회전
+    let currentRotation = (elapsed / 1000) * DEGREES_PER_SECOND;
     
-    // 속도 조절 계수 - 값이 작을수록 더 느리게 회전
-    // 원래 값인 1.0을 0.33으로 변경하여 약 1/3 속도로 감소
-    const SPEED_FACTOR = 0.33;
-    
-    let currentAngle;
-    
-    if (progress < DECELERATION_START) {
-        // 처음 80% 동안은 균일한 속도로 회전하되, 속도 계수 적용
-        // 최종 각도의 95%까지 균일하게 도달하도록 함
-        const uniformProgressPart = progress / DECELERATION_START;
-        currentAngle = (adjustedFinalAngle * 0.95 * SPEED_FACTOR) * uniformProgressPart;
-    } else {
-        // 마지막 20% 동안은 서서히 감속
-        // 이전 단계에서의 최종 위치 계산
-        const uniformEndAngle = adjustedFinalAngle * 0.95 * SPEED_FACTOR;
-        
-        // 남은 각도
-        const remainingAngle = adjustedFinalAngle - uniformEndAngle;
-        
-        const decelerationPart = (progress - DECELERATION_START) / (1 - DECELERATION_START);
-        
-        // 이징 함수(easeOutQuad)를 사용하여 감속 효과 생성
-        const easeOut = 1 - Math.pow(1 - decelerationPart, 2);
-        
-        // 균일 속도 단계의 마지막 각도 + 남은 각도의 easeOut 만큼
-        currentAngle = uniformEndAngle + remainingAngle * easeOut;
+    // 초과 회전 방지 (이건 선택사항)
+    const MAX_ROTATIONS = 10; // 최대 10바퀴까지만 회전
+    if (currentRotation > MAX_ROTATIONS * 360) {
+        currentRotation = MAX_ROTATIONS * 360;
     }
     
+    // 시간에 따른 자연스러운 랜덤성 추가 (약간의 변동성)
+    // 시간이 지남에 따라 약간의 요동을 줘서 자연스럽게 보이도록 함
+    const timeOffset = (Math.sin(elapsed / 500) * 5); // 시간에 따라 -5~5도 변동
+    
+    // 최종 회전 각도와 상관없이 일정 속도로 계속 회전
     document.getElementById('rotating-container').style.transform = 
-        `rotate(${currentAngle}deg)`;
+        `rotate(${currentRotation + timeOffset}deg)`;
+    
+    // 종료 직전 5% 시간에서는 최종 각도를 준비
+    if (elapsed > totalDuration * 0.95) {
+        // 남은 시간 비율 (0->1)
+        const remainingRatio = (totalDuration - elapsed) / (totalDuration * 0.05);
+        
+        // 현재 회전 위치와 최종 위치 사이를 선형 보간
+        // remainingRatio가 0에 가까워질수록 최종 각도에 가까워짐
+        const blendedRotation = currentRotation * remainingRatio + 
+                               adjustedFinalAngle * (1 - remainingRatio);
+        
+        document.getElementById('rotating-container').style.transform = 
+            `rotate(${blendedRotation}deg)`;
+    }
     
     animationFrameId = requestAnimationFrame(animate);
 }
-            
-            animationFrameId = requestAnimationFrame(animate);
             
             setTimeout(() => {
                 if (!animationCompleted) {
