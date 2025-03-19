@@ -405,6 +405,10 @@
 // 사운드 파일 경로가 올바른지 확인하는 개선된 로딩 함수
 function loadSounds() {
     console.log("오디오 파일 로딩 시도");
+
+    // 캐시 버스팅 매개변수 추가
+    beepSound = '/static/beep.mp3?v=' + new Date().getTime();
+    fanfareSound = '/static/fanfare.mp3?v=' + new Date().getTime();
     
     // 절대 경로를 사용하여 일관성 보장
     beepSound = '/static/beep.mp3';
@@ -658,6 +662,23 @@ function updateCountdown() {
 
     window.onload = function() {
         console.log("페이지 로드 완료");
+
+        // 오디오 컨텍스트 초기화 (추가)
+        let audioContext;
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+            // 사용자 상호작용으로 오디오 컨텍스트 재개
+            document.addEventListener('click', function() {
+                if (audioContext && audioContext.state === 'suspended') {
+                    audioContext.resume().then(() => {
+                        console.log("오디오 컨텍스트 활성화됨");
+                    });
+                }
+            }, {once: false});
+        } catch(e) {
+            console.error("오디오 컨텍스트 생성 실패:", e);
+        }
         
         stopAllSounds();
         
