@@ -402,35 +402,85 @@
         return colors;
     }
     
-    // 오디오 파일 로딩 및 준비
-    function loadSounds() {
-        console.log("오디오 파일 로딩 시도");
+// 사운드 파일 경로가 올바른지 확인하는 개선된 로딩 함수
+function loadSounds() {
+    console.log("오디오 파일 로딩 시도");
+    
+    // 절대 경로를 사용하여 일관성 보장
+    beepSound = '/static/beep.mp3';
+    fanfareSound = '/static/fanfare.mp3';
+    
+    // 재생 안정성 향상을 위해 오디오 파일 미리 로드
+    try {
+        const beepPreload = new Audio(beepSound);
+        const fanfarePreload = new Audio(fanfareSound);
         
-        beepSound = '/static/beep.mp3';
-        fanfareSound = '/static/fanfare.mp3';
-        
-        console.log("소리 파일 설정 완료:", {
-            비프음: beepSound,
-            팡파레: fanfareSound
+        // 로딩 상태 추적을 위한 이벤트 리스너 추가
+        beepPreload.addEventListener('canplaythrough', () => {
+            console.log("비프음 파일 로딩 완료");
         });
+        
+        fanfarePreload.addEventListener('canplaythrough', () => {
+            console.log("팡파레 파일 로딩 완료");
+        });
+        
+        // 프리로드 중 볼륨 0으로 설정
+        beepPreload.volume = 0;
+        fanfarePreload.volume = 0;
+        
+        // 파일 로딩 시작
+        beepPreload.load();
+        fanfarePreload.load();
+    } catch (e) {
+        console.error("오디오 파일 프리로드 중 오류:", e);
     }
+    
+    console.log("소리 파일 설정 완료:", {
+        비프음: beepSound,
+        팡파레: fanfareSound
+    });
+}
 
-    // 비프음 재생 함수
-    function startBeepLoop() {
-        stopBeepLoop();
+   // 더 나은 오류 처리를 포함한 개선된 비프음 재생 함수
+function startBeepLoop() {
+    stopBeepLoop();
+    
+    console.log("비프음 재생 시작");
+    
+    try {
+        beepAudio = new Audio(beepSound);
+        beepAudio.loop = true;
         
-        console.log("비프음 재생 시작");
+        // 추가 오류 처리 및 로깅
+        beepAudio.addEventListener('error', (e) => {
+            console.error("비프음 로딩 오류:", e);
+        });
         
-        try {
-            beepAudio = new Audio(beepSound);
-            beepAudio.loop = true;
-            beepAudio.play().catch(err => {
+        // 자동 재생 정책을 위한 사용자 상호작용 확인
+        const playPromise = beepAudio.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                console.log("비프음 재생 성공");
+            }).catch(err => {
                 console.error("비프음 재생 실패:", err);
+                
+                // 엄격한 자동 재생 정책이 있는 브라우저를 위한 대체 방법
+                // 루프 없이 단일 비프음 재생 시도
+                setTimeout(() => {
+                    try {
+                        const singleBeep = new Audio(beepSound);
+                        singleBeep.volume = 0.8;
+                        singleBeep.play().catch(e => console.log("단일 비프음도 실패:", e));
+                    } catch (e) {
+                        console.error("대체 비프음 재생 실패:", e);
+                    }
+                }, 100);
             });
-        } catch (e) {
-            console.error("비프음 시작 중 오류:", e);
         }
+    } catch (e) {
+        console.error("비프음 시작 중 오류:", e);
     }
+}
 
     // 비프음 중지 함수
     function stopBeepLoop() {
@@ -459,20 +509,42 @@
         stopBeepLoop();
     }
 
-    // 팡파레 재생 함수
-    function playFanfare() {
-        console.log("팡파레 재생, 소리 파일:", fanfareSound);
+ // 개선된 팡파레 사운드 재생 함수
+function playFanfare() {
+    console.log("팡파레 재생, 소리 파일:", fanfareSound);
+    
+    try {
+        const audio = new Audio(fanfareSound);
+        audio.volume = 0.8;
         
-        try {
-            const audio = new Audio(fanfareSound);
-            audio.volume = 0.8;
-            audio.play()
+        // 오류 이벤트 리스너 추가
+        audio.addEventListener('error', (e) => {
+            console.error("팡파레 로딩 오류:", e);
+        });
+        
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+            playPromise
                 .then(() => console.log("팡파레 재생 성공"))
-                .catch(err => console.error("팡파레 재생 실패:", err));
-        } catch (e) {
-            console.error("팡파레 재생 중 오류:", e);
+                .catch(err => {
+                    console.error("팡파레 재생 실패:", err);
+                    
+                    // 짧은 지연 후 다시 시도
+                    setTimeout(() => {
+                        try {
+                            const retryAudio = new Audio(fanfareSound);
+                            retryAudio.volume = 0.9;
+                            retryAudio.play().catch(e => console.log("재시도 팡파레 실패:", e));
+                        } catch (e) {
+                            console.error("팡파레 재시도 중 오류:", e);
+                        }
+                    }, 500);
+                });
         }
+    } catch (e) {
+        console.error("팡파레 재생 중 오류:", e);
     }
+}
     
     // 카운트다운 함수
     function startCountdown(durationInSeconds) {
@@ -884,6 +956,8 @@ socket.on('update_winner', function(data) {
                 document.getElementById('remaining-time').innerText = '--:--:--';
             }
         });
+        
+// 게스트가 진행 중인 게임에 참여할 때 사운드 처리를 위한 개선된 game_status 이벤트 핸들러
 socket.on('game_status', function(data) {
     console.log('게임 상태 수신:', data);
 
@@ -911,6 +985,14 @@ socket.on('game_status', function(data) {
             // 진행 중인 게임이고 회전 정보가 있는 경우
             if (data.is_running && data.finalAngle && diffMs > 0) {
                 console.log("진행 중인 게임 감지: 원판 회전 시작");
+                
+                // 핵심 수정 - 게스트가 진행 중인 게임에 참여할 때 비프음 재생
+                if (document.getElementById('guest-current-time')) {
+                    console.log("게스트 모드에서 진행 중인 게임 감지 - 비프음 재생");
+                    setTimeout(() => {
+                        startBeepLoop();
+                    }, 500);
+                }
                 
                 // 원판 회전 시작
                 const finalAngle = data.finalAngle;
@@ -956,6 +1038,9 @@ socket.on('game_status', function(data) {
                             
                             console.log('애니메이션 완료 (후발 참가자)');
                             
+                            // 애니메이션 완료 시 비프음 중지
+                            stopBeepLoop();
+                            
                             // 카운트다운 종료
                             if (countdownInterval) {
                                 clearInterval(countdownInterval);
@@ -982,6 +1067,9 @@ socket.on('game_status', function(data) {
                         cancelAnimationFrame(animationFrameId);
                         document.getElementById('rotating-container').style.transform = 
                             `rotate(${adjustedFinalAngle}deg)`;
+                        
+                        // 비프음 중지
+                        stopBeepLoop();
                     }
                 }, totalRemainingDuration + 500);
             }
