@@ -1,7 +1,7 @@
 Flask==2.2.5
 Flask-Login==0.6.3
 Flask-SocketIO==5.5.1
-eventlet==0.33.3
+eventlet==0.33.0
 numpy
 wtforms==3.2.1
 python-engineio==4.11.2
