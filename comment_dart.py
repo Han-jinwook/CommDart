@@ -9,6 +9,8 @@ from wtforms import Form, StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired
 
 from flask_socketio import SocketIO
+import eventlet
+eventlet.monkey_patch()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
@@ -17,7 +19,7 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 CORS(app)
 
 # SocketIO 객체 수정
-socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins="*")
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 # ----- 로그인 매니저 설정 -----
 login_manager = LoginManager()
@@ -441,4 +443,5 @@ Thread(target=send_current_time, daemon=True).start()
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=True)
+
 
