@@ -16,8 +16,8 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 # CORS 설정 추가
 CORS(app)
 
-# SocketIO 객체 수정
-socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins="*")
+# [수정됨] SocketIO 객체 수정: async_mode를 'eventlet'으로 변경 (서버 환경과 일치)
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 # ----- 로그인 매니저 설정 -----
 login_manager = LoginManager()
@@ -85,10 +85,10 @@ def logout():
 @app.route('/guest')
 def guest_view():
     return render_template('index.html',
-                          participants=participants,
-                          colors=colors,
-                          user=None,
-                          is_guest=True)
+                           participants=participants,
+                           colors=colors,
+                           user=None,
+                           is_guest=True)
     
 # ----- 참가자 로딩 함수 (가나다순 정렬 추가) -----
 def load_participants(filename="participants.txt"):
@@ -423,24 +423,20 @@ def calculate_winner_at_angle(angle):
     print(f"ERROR: 당첨자를 결정할 수 없음 (각도: {normalized_angle:.2f}°)")
     return names[0]  # 기본값으로 첫 번째 참가자 반환
 
-import time
-from threading import Thread
-
+# [수정됨] 시간 전송 로직 수정 (threading.Thread 제거하고 socketio 백그라운드 태스크 사용)
 def send_current_time():
     """현재 시간을 1초마다 클라이언트로 전송하는 함수"""
     while True:
         now = datetime.datetime.now().strftime('%H:%M:%S')
-        print(f"[DEBUG] send_current_time 실행 중 - 현재 시간 전송: {now}")  # 디버깅 로그 추가
+        # print(f"[DEBUG] send_current_time 실행 중 - 현재 시간 전송: {now}") # 로그 너무 많으면 주석 처리
         socketio.emit('update_current_time', {'current_time': now}, namespace='/')
-        time.sleep(1)  # 1초마다 업데이트
+        socketio.sleep(1)  # [중요] time.sleep 대신 socketio.sleep 사용
 
 # 서버 시작 시 현재 시간 업데이트 쓰레드 실행
-Thread(target=send_current_time, daemon=True).start()
+# [수정됨] threading.Thread 대신 socketio.start_background_task 사용
+socketio.start_background_task(send_current_time)
 
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=True)
-
-
-
