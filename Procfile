@@ -1,4 +1,5 @@
-web: gunicorn comment_dart:app -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:$PORT
+web: gunicorn comment_dart:app
+
 
 
 
