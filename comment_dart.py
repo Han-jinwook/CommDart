@@ -17,7 +17,7 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 CORS(app)
 
 # SocketIO 객체 수정
-socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins="*")
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 # ----- 로그인 매니저 설정 -----
 login_manager = LoginManager()
@@ -440,6 +440,7 @@ Thread(target=send_current_time, daemon=True).start()
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
+
 
 
 
