@@ -1,4 +1,4 @@
-web: gunicorn comment_dart:app
+web:gunicorn comment_dart:app
 
 
 
